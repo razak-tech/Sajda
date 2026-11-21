@@ -16,7 +16,11 @@
         "title": "Sajda",
         "width": 400,
         "height": 375,
-        "resizable": false
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "shadow": false
       }
     ],
     "security": {
