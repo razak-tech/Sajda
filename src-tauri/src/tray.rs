@@ -1,9 +1,12 @@
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Rect, WebviewWindow, WindowEvent,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 
 const TRAY_ID: &str = "sajda";
 
@@ -24,8 +27,12 @@ fn position(window: &WebviewWindow, rect: Rect) -> tauri::Result<()> {
     let x = (anchor.x + icon.width - width)
         .clamp(area.position.x, (right - width).max(area.position.x));
     let above = anchor.y - height - margin;
-    let y = if above >= area.position.y { above } else { anchor.y + icon.height + margin }
-        .clamp(area.position.y, (bottom - height).max(area.position.y));
+    let y = if above >= area.position.y {
+        above
+    } else {
+        anchor.y + icon.height + margin
+    }
+    .clamp(area.position.y, (bottom - height).max(area.position.y));
     window.set_position(PhysicalPosition::new(x, y))
 }
 
@@ -47,9 +54,16 @@ pub fn fit_window(
         let height_limit = monitor.map_or(800, |monitor| {
             (monitor.work_area().size.height as f64 / monitor.scale_factor()) as u32
         });
-        window.set_size(LogicalSize::new(width.clamp(320, 400), height.clamp(1, height_limit.max(1))))?;
+        window.set_size(LogicalSize::new(
+            width.clamp(320, 400),
+            height.clamp(1, height_limit.max(1)),
+        ))?;
         if popup {
-            if let Some(rect) = window.app_handle().tray_by_id(TRAY_ID).and_then(|tray| tray.rect().ok().flatten()) {
+            if let Some(rect) = window
+                .app_handle()
+                .tray_by_id(TRAY_ID)
+                .and_then(|tray| tray.rect().ok().flatten())
+            {
                 position(&window, rect)?;
             }
         } else {
@@ -68,13 +82,31 @@ pub fn set_menu(app: &AppHandle, arabic: bool) -> tauri::Result<()> {
 }
 
 fn menu(app: &AppHandle, arabic: bool) -> tauri::Result<Menu<tauri::Wry>> {
-    let settings = MenuItem::with_id(app, "settings", if arabic { "الإعدادات" } else { "Settings" }, true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", if arabic { "خروج" } else { "Quit" }, true, None::<&str>)?;
+    let settings = MenuItem::with_id(
+        app,
+        "settings",
+        if arabic {
+            "الإعدادات"
+        } else {
+            "Settings"
+        },
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        if arabic { "خروج" } else { "Quit" },
+        true,
+        None::<&str>,
+    )?;
     Menu::with_items(app, &[&settings, &quit])
 }
 
 pub fn install(app: &AppHandle) -> tauri::Result<()> {
-    let window = app.get_webview_window("main").expect("main window is configured");
+    let window = app
+        .get_webview_window("main")
+        .expect("main window is configured");
     let shown_by_tray = Arc::new(AtomicBool::new(false));
     let dismiss_on_blur = shown_by_tray.clone();
     let window_for_event = window.clone();
@@ -98,7 +130,11 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
 
     let settings_view = shown_by_tray.clone();
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(app.default_window_icon().expect("app icon is configured").clone())
+        .icon(
+            app.default_window_icon()
+                .expect("app icon is configured")
+                .clone(),
+        )
         .tooltip("Sajda")
         .menu(&menu(app, false)?)
         .show_menu_on_left_click(false)
@@ -115,7 +151,13 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(move |tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, rect, .. } = event {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                rect,
+                ..
+            } = event
+            {
                 if let Some(window) = tray.app_handle().get_webview_window("main") {
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
@@ -133,5 +175,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
 }
 
 pub fn set_popup_mode(window: &WebviewWindow, popup: bool) {
-    window.state::<Arc<AtomicBool>>().store(popup, Ordering::Relaxed);
+    window
+        .state::<Arc<AtomicBool>>()
+        .store(popup, Ordering::Relaxed);
 }

@@ -74,3 +74,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); out
 .action.secondary { border-color: var(--line); background: var(--white); }
 .action.plain { background: transparent; }
 .action.error, .notice.error { background: var(--error); }
+.frame > h1 { font-size: 24px; font-weight: 600; line-height: 36px; }
+.frame > h2, .city-card h2 { font-size: 18px; font-weight: 600; line-height: 27px; }
+.description { color: var(--muted); font-size: 13px; line-height: 20px; }
+.note { color: var(--muted); font-size: 11px; line-height: 17px; }
+.notice { padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 12px; line-height: 18px; }
+.city-card { display: grid; gap: 12px; padding: 14px 16px; border-radius: 8px; background: var(--white); }
+.language-row { display: grid; grid-template-columns: 1fr 186px; align-items: center; gap: 12px; }
+.city-field { position: relative; display: grid; }
+.city-field img { position: absolute; inset-inline-start: 14px; inset-block-start: 13px; pointer-events: none; }
+.city-field input {
+  height: 44px; min-width: 0; width: 100%; padding: 0 14px;
+  padding-inline-start: 40px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--white); font-size: 13px; text-align: start;
+}
+.city-field input::placeholder { color: var(--muted); }
+.results { max-height: 148px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--white); }
+.city-result {
+  display: grid; width: 100%; padding: 10px 12px; text-align: start;
+  border: 2px solid transparent; border-radius: 6px; background: transparent;
+}
+.city-result + .city-result { box-shadow: 0 -1px 0 var(--line); }
+.city-result:hover, .city-result[aria-selected='true'] { background: var(--soft); }
+.city-result[aria-selected='true'] { border-color: var(--focus); }
+.city-result strong { font-size: 15px; line-height: 23px; font-weight: 600; }
+.city-result span { font-size: 12px; line-height: 18px; color: var(--muted); }
+[dir='rtl'] .frame > h1 { line-height: 42px; }
+[dir='rtl'] .frame > h2, [dir='rtl'] .city-card h2 { line-height: 32px; }
+[dir='rtl'] .description { line-height: 23px; }
+[dir='rtl'] .note, [dir='rtl'] .notice { line-height: 21px; }

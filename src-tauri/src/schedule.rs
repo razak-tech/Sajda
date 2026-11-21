@@ -11,7 +11,23 @@ pub enum Prayer {
 }
 
 impl Prayer {
-    pub const DAILY: [Self; 5] = [Self::Fajr, Self::Dhuhr, Self::Asr, Self::Maghrib, Self::Isha];
+    pub const DAILY: [Self; 5] = [
+        Self::Fajr,
+        Self::Dhuhr,
+        Self::Asr,
+        Self::Maghrib,
+        Self::Isha,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Fajr => "Fajr",
+            Self::Dhuhr => "Dhuhr",
+            Self::Asr => "Asr",
+            Self::Maghrib => "Maghrib",
+            Self::Isha => "Isha",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -53,7 +69,10 @@ mod tests {
             }
         }
         for (index, prayer) in prayers.iter().enumerate().take(5) {
-            let next = prayers.iter().find(|next| next.instant > prayer.instant).unwrap();
+            let next = prayers
+                .iter()
+                .find(|next| next.instant > prayer.instant)
+                .unwrap();
             assert_eq!(next.name, prayers[index + 1].name);
             assert_eq!(next.date, prayers[index + 1].date);
         }
