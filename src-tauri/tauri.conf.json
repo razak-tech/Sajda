@@ -16,6 +16,7 @@
         "title": "Sajda",
         "width": 400,
         "height": 375,
+        "visible": false,
         "resizable": false,
         "decorations": false,
         "transparent": true,

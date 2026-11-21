@@ -9,6 +9,8 @@ tauri-build = "2"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["time"] }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = { version = "0.10", features = ["serde"] }

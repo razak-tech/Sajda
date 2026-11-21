@@ -12,6 +12,7 @@ use std::{
     sync::Mutex,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_autostart::ManagerExt;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Location {
@@ -32,6 +33,8 @@ pub enum Language {
 pub struct Saved {
     pub location: Option<Location>,
     pub language: Language,
+    pub startup: bool,
+    pub setup_city: Option<City>,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -115,6 +118,46 @@ pub fn save_language(
 }
 
 #[tauri::command]
+pub fn save_startup(
+    app: AppHandle,
+    store: State<'_, Store>,
+    enabled: bool,
+    setup_city: Option<City>,
+) -> Result<Snapshot, String> {
+    let startup = app.autolaunch();
+    let previous = startup.is_enabled().map_err(|error| error.to_string())?;
+    let set = |enabled| {
+        if enabled {
+            startup.enable()
+        } else {
+            startup.disable()
+        }
+    };
+    if previous != enabled {
+        set(enabled).map_err(|error| error.to_string())?;
+    }
+    let result = store.update(|saved| {
+        saved.startup = enabled;
+        if setup_city.is_some() && saved.location.is_none() {
+            saved.setup_city = setup_city;
+        }
+    });
+    if let Ok(snapshot) = &result {
+        publish(&app, snapshot);
+    } else if previous != enabled {
+        let _ = set(previous);
+    }
+    result
+}
+
+#[tauri::command]
+pub fn clear_setup(app: AppHandle, store: State<'_, Store>) -> Result<(), String> {
+    let snapshot = store.update(|saved| saved.setup_city = None)?;
+    publish(&app, &snapshot);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn save_location(
     app: AppHandle,
     store: State<'_, Store>,
@@ -123,6 +166,7 @@ pub fn save_location(
     let mut state = store.state.lock().expect("Sajda state lock");
     let mut saved = state.saved.clone();
     saved.location = Some(location);
+    saved.setup_city = None;
     store.persist(&saved).map_err(|e| e.to_string())?;
     state.saved = saved;
     state.offline = false;

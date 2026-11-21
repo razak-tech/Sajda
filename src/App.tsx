@@ -5,16 +5,19 @@ import { Chrome } from './Chrome'
 import { CityPicker } from './CityPicker'
 import { LanguagePicker } from './LanguagePicker'
 import { Popup } from './Popup'
+import { StartupSwitch } from './StartupSwitch'
 import { cityLabel, type City, type Language } from './cities'
 import { nextPrayer, type Schedule } from './prayers'
 
-type View = 'popup' | 'setup' | 'settings' | 'picker' | 'setup-load' | 'change-load'
+type View = 'popup' | 'setup' | 'startup' | 'settings' | 'picker' | 'setup-load' | 'change-load'
 type Location = { city: City; schedule: Schedule }
 type Snapshot = {
   location: Location | null
   language: Language
   offline: boolean
   refreshing: boolean
+  startup: boolean
+  setup_city: City | null
   revision: number
 }
 
@@ -29,6 +32,9 @@ export function App() {
   const [offline, setOffline] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [preferenceError, setPreferenceError] = useState(false)
+  const [startup, setStartup] = useState(false)
+  const [startupChoice, setStartupChoice] = useState(false)
+  const [savingStartup, setSavingStartup] = useState(false)
   const [ready, setReady] = useState(!isTauri())
   const [now, setNow] = useState(Date.now)
   const request = useRef(0)
@@ -55,6 +61,7 @@ export function App() {
       if (disposed) return
       applySnapshot(snapshot)
       if (snapshot.location) setView('popup')
+      else if (snapshot.setup_city) void load(snapshot.setup_city, true)
     }).catch(() => setPreferenceError(true)).finally(() => {
       if (!disposed) setReady(true)
     })
@@ -93,6 +100,7 @@ export function App() {
     setLanguage(snapshot.language)
     setOffline(snapshot.offline)
     setRefreshing(snapshot.refreshing)
+    setStartup(snapshot.startup)
   }
 
   async function chooseLanguage(language: Language) {
@@ -105,6 +113,20 @@ export function App() {
       setPreferenceError(false)
     } catch {
       setPreferenceError(true)
+    }
+  }
+
+  async function saveStartup(enabled: boolean, city: City | null = null) {
+    setSavingStartup(true)
+    try {
+      const snapshot = await invoke<Snapshot>('save_startup', { enabled, setupCity: city })
+      applySnapshot(snapshot)
+      setPreferenceError(false)
+      if (city) void load(city, true)
+    } catch {
+      setPreferenceError(true)
+    } finally {
+      setSavingStartup(false)
     }
   }
 
@@ -131,7 +153,15 @@ export function App() {
     }
   }
 
-  function cancel() {
+  async function cancel() {
+    if (!active && view === 'setup-load') {
+      try {
+        await invoke('clear_setup')
+      } catch {
+        setPreferenceError(true)
+        return
+      }
+    }
     ++request.current
     setCandidate(null)
     setFailed(false)
@@ -158,7 +188,25 @@ export function App() {
       <h1>{ar ? 'اختر مدينتك' : 'Choose your city'}</h1>
       <p className="description">{ar ? 'مواقيت الصلاة حسب التوقيت المحلي لمدينتك.' : 'Prayer times in your city’s local time.'}</p>
       <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
-      <CityPicker key={language} language={language} select={(city) => void load(city, true)} />
+      <CityPicker key={language} language={language} select={(city) => {
+        setCandidate(city)
+        setStartupChoice(startup)
+        setView('startup')
+      }} />
+    </>}
+    {view === 'startup' && candidate && <>
+      <p className="note">{ar ? 'الإعداد · ٢ من ٣' : 'SETUP / 2 OF 3'}</p>
+      <h1>{ar ? 'ابدأ مع ويندوز' : 'Start with Windows'}</h1>
+      <p className="description">{ar ? 'شغّل سجدة تلقائيًا عند تسجيل الدخول لتبقى التذكيرات فعّالة في الخلفية.'
+        : 'Launch Sajda at sign-in to keep prayer reminders running in the background.'}</p>
+      <StartupSwitch ar={ar} enabled={startupChoice} disabled={savingStartup} change={setStartupChoice} />
+      <p className="notice">{ar ? 'المدينة المختارة: ' : 'Selected city: '}<bdi>{cityLabel(candidate, language)}</bdi></p>
+      <button className="action" disabled={savingStartup} onClick={() => void saveStartup(startupChoice, candidate)}>
+        {ar ? 'متابعة' : 'Continue'}
+      </button>
+      <button className="action secondary" disabled={savingStartup} onClick={() => void cancel()}>
+        {ar ? 'تغيير المدينة ←' : '← Change city'}
+      </button>
     </>}
     {view === 'settings' && active && <>
       <h1>{ar ? 'الإعدادات' : 'Settings'}</h1>
@@ -167,6 +215,8 @@ export function App() {
         <h2><bdi>{cityLabel(active.city, language)}</bdi></h2>
         <button className="action secondary" onClick={() => setView('picker')}>{changeLabel}</button>
       </section>
+      <StartupSwitch ar={ar} enabled={startup} disabled={savingStartup} change={(value) => void saveStartup(value)} />
+      <p className="caption">{ar ? 'تشغيل سجدة عند تسجيل الدخول.' : 'Launch Sajda automatically at sign-in.'}</p>
       <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
       <p className="note">{ar ? 'تُحفظ التغييرات تلقائيًا.' : 'Changes are saved automatically.'}</p>
       <button className="action" onClick={() => setView('popup')}>{ar ? 'تم' : 'Done'}</button>
@@ -184,6 +234,9 @@ export function App() {
       {active && <p className="notice">{ar ? 'تبقى مواقيت مدينتك الحالية وتذكيراتها فعّالة حتى تجهز المواقيت الجديدة.'
         : `${active.city.name}’s times and reminders stay active until your new schedule is ready.`}</p>}
       <h2><bdi>{cityLabel(candidate, language)}</bdi></h2>
+      {!active && <p className="caption">{ar
+        ? `البدء مع ويندوز: ${startup ? 'مفعّل' : 'متوقف'}`
+        : `Start with Windows: ${startup ? 'On' : 'Off'}`}</p>}
       {!active && <p className="notice">{ar ? 'طريقة الحساب الافتراضية لمزوّد المواقيت.' : 'Using the provider’s default calculation method.'}</p>}
       {loading && <h2 role="status">{ar ? 'جارٍ تحميل مواقيت الصلاة…' : 'Loading prayer times…'}</h2>}
       {loading && !active && <p className="caption">{ar ? 'سنفتح سجدة عند اكتمال التحميل.' : 'Sajda will open when your schedule is ready.'}</p>}
