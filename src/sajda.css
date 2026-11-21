@@ -1,0 +1,76 @@
+:root {
+  --paper: #f6f5ef;
+  --ink: #173f35;
+  --muted: #596b62;
+  --line: #d8ded5;
+  --white: #fdfdfc;
+  --lime: #d5e9ad;
+  --soft: #e8ede4;
+  --error: #f8e9e3;
+  --focus: #316bdc;
+  font-family: 'Inter Variable', sans-serif;
+  color: var(--ink);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body, h1, h2, p { margin: 0; }
+[dir='rtl'] { font-family: 'Noto Sans Arabic Variable', sans-serif; }
+body { overflow: hidden; }
+#root { max-height: 100vh; overflow: auto; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 400px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  padding: 20px 24px 24px;
+}
+.frame.popup { width: 360px; padding-block: 16px 20px; gap: 14px; }
+.chrome { display: flex; align-items: center; gap: 12px; }
+.popup .chrome { gap: 8px; }
+.brand { flex: 1; font-size: 15px; line-height: 23px; font-weight: 600; }
+.mark { position: relative; inline-size: 24px; block-size: 24px; flex: none; }
+.mark-niche, .mark-sun { position: absolute; display: block; }
+.mark-niche { left: 5px; top: 3px; }
+.mark-sun { left: 12.5px; top: 15.5px; }
+.icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; padding: 0; border-radius: 6px; background: transparent; }
+.icon:hover { background: var(--soft); }
+.icon:active { background: var(--line); }
+.caption { color: var(--muted); font-size: 12px; line-height: 18px; }
+[dir='rtl'] .caption { line-height: 21px; }
+.prayer { display: grid; gap: 2px; }
+.prayer-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; }
+.prayer-line h1 { font-size: 26px; line-height: 38px; font-weight: 600; }
+.prayer-line time { font: 600 20px/29px 'Inter Variable', sans-serif; }
+[dir='rtl'] .prayer-line h1 { line-height: 45px; }
+.countdown { font: 500 46px/60px 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.popup-status { border-top: 1px solid var(--line); padding-top: 10px; color: var(--muted); font-size: 11px; line-height: 16px; }
+[dir='rtl'] .popup-status { line-height: 19px; }
+.prayer h2 { font-size: 18px; line-height: 27px; font-weight: 600; }
+.prayer.loading { min-height: 73px; align-content: start; }
+.prayer.unavailable { min-height: 119px; }
+.prayer.unavailable .action { margin-top: 8px; }
+[dir='rtl'] .prayer.loading { min-height: 84px; }
+[dir='rtl'] .prayer.unavailable { min-height: 130px; }
+.action {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  min-height: 40px;
+  width: 100%;
+  padding: 0 16px;
+  background: var(--lime);
+  font-size: 13px;
+  font-weight: 600;
+}
+.action:hover { filter: brightness(.97); }
+.action:active { filter: brightness(.93); }
+.action.secondary { border-color: var(--line); background: var(--white); }
+.action.plain { background: transparent; }
+.action.error, .notice.error { background: var(--error); }
