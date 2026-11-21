@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod clock;
 mod provider;
 mod reminders;
 mod schedule;
@@ -53,6 +54,11 @@ fn main() {
             }
             app.manage(store);
             tray::install(app.handle())?;
+            let window = app
+                .get_webview_window("main")
+                .expect("main window is configured");
+            #[cfg(windows)]
+            clock::install(&window)?;
             tray::set_menu(
                 app.handle(),
                 matches!(snapshot.saved.language, state::Language::Ar),
@@ -60,9 +66,6 @@ fn main() {
             state::start_refresh_loop(app.handle().clone());
             reminders::start(app.handle().clone());
             if !std::env::args().any(|arg| arg == "--autostart") {
-                let window = app
-                    .get_webview_window("main")
-                    .expect("main window is configured");
                 window.show()?;
                 window.set_focus()?;
             }

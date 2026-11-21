@@ -1,4 +1,5 @@
 use crate::{
+    clock::Reading,
     schedule::{Occurrence, Prayer},
     state::{Language, Snapshot, Store},
 };
@@ -56,16 +57,23 @@ fn due(snapshot: &Snapshot, previous: DateTime<Utc>, now: DateTime<Utc>) -> Opti
 
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let mut previous = Utc::now();
+        let mut previous = Reading::now();
         loop {
             tokio::time::sleep(Duration::from_millis(250)).await;
-            let now = Utc::now();
-            if (0..=2_000).contains(&(now - previous).num_milliseconds()) {
+            let now = Reading::now();
+            if now.should_refresh(&previous) {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = crate::state::refresh_schedule(app).await;
+                });
+            }
+            if now.may_dispatch(&previous) {
                 let store = app.state::<Store>();
                 let snapshot = store.snapshot();
-                if let (Some(location), Some(prayer)) =
-                    (&snapshot.saved.location, due(&snapshot, previous, now))
-                {
+                if let (Some(location), Some(prayer)) = (
+                    &snapshot.saved.location,
+                    due(&snapshot, previous.utc, now.utc),
+                ) {
                     let key = AlertKey {
                         city_id: location.city.id,
                         date: prayer.date,
