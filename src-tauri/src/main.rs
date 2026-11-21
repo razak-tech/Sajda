@@ -2,7 +2,10 @@
 
 mod provider;
 mod schedule;
+mod state;
 mod tray;
+
+use tauri::Manager;
 
 #[tauri::command]
 async fn search_cities(
@@ -25,14 +28,27 @@ fn main() {
     tauri::Builder::default()
         .manage(provider::client().expect("failed to initialize the network client"))
         .setup(|app| {
+            let path = app.path().app_local_data_dir()?.join("state.json");
+            let store = state::Store::open(path)?;
+            let snapshot = store.snapshot();
+            app.manage(store);
             tray::install(app.handle())?;
+            tray::set_menu(
+                app.handle(),
+                matches!(snapshot.saved.language, state::Language::Ar),
+            )?;
+            state::start_refresh_loop(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             tray::dismiss,
             tray::fit_window,
             search_cities,
-            load_schedule
+            load_schedule,
+            state::get_state,
+            state::save_location,
+            state::save_language,
+            state::refresh_schedule
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Sajda");

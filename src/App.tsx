@@ -10,6 +10,13 @@ import { nextPrayer, type Schedule } from './prayers'
 
 type View = 'popup' | 'setup' | 'settings' | 'picker' | 'setup-load' | 'change-load'
 type Location = { city: City; schedule: Schedule }
+type Snapshot = {
+  location: Location | null
+  language: Language
+  offline: boolean
+  refreshing: boolean
+  revision: number
+}
 
 export function App() {
   const [view, setView] = useState<View>('setup')
@@ -18,8 +25,14 @@ export function App() {
   const [candidate, setCandidate] = useState<City | null>(null)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [committing, setCommitting] = useState(false)
+  const [offline, setOffline] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [preferenceError, setPreferenceError] = useState(false)
+  const [ready, setReady] = useState(!isTauri())
   const [now, setNow] = useState(Date.now)
   const request = useRef(0)
+  const revision = useRef(-1)
   const frame = useRef<HTMLElement>(null)
   const ar = language === 'ar'
   const popup = view === 'popup' && active !== null
@@ -31,14 +44,25 @@ export function App() {
     const tick = () => setNow(Date.now())
     const interval = window.setInterval(tick, 250)
     window.addEventListener('focus', tick)
-    if (!isTauri()) return () => clearInterval(interval)
-    const unsubscribe = listen('open-settings', () => {
-      setView((current) => current === 'popup' ? 'settings' : current)
+    let disposed = false
+    const listeners = isTauri() ? Promise.all([
+      listen<Snapshot>('state-changed', ({ payload }) => applySnapshot(payload)),
+      listen('open-settings', () => {
+        setView((current) => current === 'popup' ? 'settings' : current)
+      }),
+    ]) : Promise.resolve([])
+    if (isTauri()) void listeners.then(() => invoke<Snapshot>('get_state')).then((snapshot) => {
+      if (disposed) return
+      applySnapshot(snapshot)
+      if (snapshot.location) setView('popup')
+    }).catch(() => setPreferenceError(true)).finally(() => {
+      if (!disposed) setReady(true)
     })
     return () => {
+      disposed = true
       window.removeEventListener('focus', tick)
       clearInterval(interval)
-      void unsubscribe.then((stop) => stop())
+      void listeners.then((stops) => stops.forEach((stop) => stop()))
     }
   }, [])
 
@@ -62,6 +86,28 @@ export function App() {
     return () => observer.disconnect()
   }, [popup])
 
+  function applySnapshot(snapshot: Snapshot) {
+    if (snapshot.revision <= revision.current) return
+    revision.current = snapshot.revision
+    setActive(snapshot.location)
+    setLanguage(snapshot.language)
+    setOffline(snapshot.offline)
+    setRefreshing(snapshot.refreshing)
+  }
+
+  async function chooseLanguage(language: Language) {
+    if (!isTauri()) {
+      setLanguage(language)
+      return
+    }
+    try {
+      await invoke('save_language', { language })
+      setPreferenceError(false)
+    } catch {
+      setPreferenceError(true)
+    }
+  }
+
   async function load(city: City, setup: boolean) {
     const id = ++request.current
     setCandidate(city)
@@ -71,12 +117,17 @@ export function App() {
     try {
       const schedule = await invoke<Schedule>('load_schedule', { city })
       if (request.current !== id) return
-      setActive({ city, schedule })
+      setCommitting(true)
+      const snapshot = await invoke<Snapshot>('save_location', { location: { city, schedule } })
+      applySnapshot(snapshot)
       setView(setup ? 'popup' : 'settings')
     } catch {
       if (request.current === id) setFailed(true)
     } finally {
-      if (request.current === id) setLoading(false)
+      if (request.current === id) {
+        setLoading(false)
+        setCommitting(false)
+      }
     }
   }
 
@@ -97,13 +148,16 @@ export function App() {
   }}>
     <Chrome ar={ar} close={dismiss} settings={popup ? () => setView('settings') : undefined} />
     {popup && <Popup ar={ar} city={cityLabel(active.city, language)} cityName={active.city.name}
-      next={nextPrayer(active.schedule, now, active.city.timezone)} now={now} offline={false}
-      loading={loading} retry={() => void load(active.city, false)} />}
-    {view === 'setup' && <>
+      next={nextPrayer(active.schedule, now, active.city.timezone)} now={now} offline={offline}
+      loading={refreshing} retry={() => void invoke('refresh_schedule').catch(() => undefined)} />}
+    {preferenceError && !popup && <p className="notice error" role="alert">
+      {ar ? 'تعذّر حفظ التفضيلات أو قراءتها.' : 'Couldn’t save or read your preferences.'}
+    </p>}
+    {ready && view === 'setup' && <>
       <p className="note">{ar ? 'الإعداد · ١ من ٣' : 'SETUP / 1 OF 3'}</p>
       <h1>{ar ? 'اختر مدينتك' : 'Choose your city'}</h1>
       <p className="description">{ar ? 'مواقيت الصلاة حسب التوقيت المحلي لمدينتك.' : 'Prayer times in your city’s local time.'}</p>
-      <LanguagePicker language={language} select={setLanguage} />
+      <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
       <CityPicker key={language} language={language} select={(city) => void load(city, true)} />
     </>}
     {view === 'settings' && active && <>
@@ -113,7 +167,7 @@ export function App() {
         <h2><bdi>{cityLabel(active.city, language)}</bdi></h2>
         <button className="action secondary" onClick={() => setView('picker')}>{changeLabel}</button>
       </section>
-      <LanguagePicker language={language} select={setLanguage} />
+      <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
       <p className="note">{ar ? 'تُحفظ التغييرات تلقائيًا.' : 'Changes are saved automatically.'}</p>
       <button className="action" onClick={() => setView('popup')}>{ar ? 'تم' : 'Done'}</button>
     </>}
@@ -139,7 +193,7 @@ export function App() {
           : (ar ? 'تعذّر تحميل المواقيت. اتصل بالإنترنت ثم أعد المحاولة.' : 'Couldn’t load prayer times. Connect to the internet and try again.')}</p>
         <button className="action" autoFocus onClick={() => void load(candidate, !active)}>{errorLabel}</button>
       </>}
-      {(active || failed) && <button className="action secondary" onClick={cancel}>{active ? cancelLabel : changeLabel}</button>}
+      {(active || failed) && <button className="action secondary" disabled={committing} onClick={cancel}>{active ? cancelLabel : changeLabel}</button>}
     </>}
   </main>
 }
