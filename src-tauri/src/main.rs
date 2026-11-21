@@ -31,10 +31,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if !args.iter().any(|arg| arg == "--autostart") {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                tray::show_popup(app);
             }
         }))
         .plugin(tauri_plugin_autostart::init(
@@ -64,7 +61,7 @@ fn main() {
                 matches!(snapshot.saved.language, state::Language::Ar),
             )?;
             state::start_refresh_loop(app.handle().clone());
-            reminders::start(app.handle().clone());
+            reminders::start(app.handle().clone())?;
             if !std::env::args().any(|arg| arg == "--autostart") {
                 window.show()?;
                 window.set_focus()?;

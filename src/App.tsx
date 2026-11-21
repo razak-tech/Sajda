@@ -56,6 +56,9 @@ export function App() {
       listen('open-settings', () => {
         setView((current) => current === 'popup' ? 'settings' : current)
       }),
+      listen('open-popup', () => {
+        setView((current) => ['settings', 'picker', 'change-load'].includes(current) ? 'popup' : current)
+      }),
     ]) : Promise.resolve([])
     if (isTauri()) void listeners.then(() => invoke<Snapshot>('get_state')).then((snapshot) => {
       if (disposed) return
@@ -142,7 +145,7 @@ export function App() {
       setCommitting(true)
       const snapshot = await invoke<Snapshot>('save_location', { location: { city, schedule } })
       applySnapshot(snapshot)
-      setView(setup ? 'popup' : 'settings')
+      setView((current) => setup || current === 'popup' ? 'popup' : 'settings')
     } catch {
       if (request.current === id) setFailed(true)
     } finally {

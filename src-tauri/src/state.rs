@@ -1,7 +1,7 @@
 use crate::{
     provider::{self, City},
-    reminders::AlertKey,
-    schedule::Schedule,
+    reminders::{self, AlertKey},
+    schedule::{Occurrence, Schedule},
     tray,
 };
 use chrono::{Duration, Utc};
@@ -87,31 +87,39 @@ impl Store {
         Ok(snapshot.clone())
     }
 
-    pub fn claim_alert(
+    pub fn claim_due(
         &self,
-        key: AlertKey,
-        instant: chrono::DateTime<Utc>,
-    ) -> Result<bool, String> {
+        previous: chrono::DateTime<Utc>,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<Option<(Occurrence, Language, String)>, String> {
         let mut state = self.state.lock().expect("Sajda state lock");
-        let current = state.saved.location.as_ref().is_some_and(|location| {
-            location.city.id == key.city_id
-                && location.schedule.prayers.iter().any(|prayer| {
-                    prayer.name == key.prayer
-                        && prayer.date == key.date
-                        && prayer.instant == instant
-                })
-        });
-        if !current
-            || state.active_since.is_some_and(|since| instant <= since)
+        let (Some(location), Some(prayer)) =
+            (&state.saved.location, reminders::due(&state, previous, now))
+        else {
+            return Ok(None);
+        };
+        let key = AlertKey {
+            city_id: location.city.id,
+            date: prayer.date,
+            prayer: prayer.name,
+        };
+        if state
+            .active_since
+            .is_some_and(|since| prayer.instant <= since)
             || state.saved.alerts.contains(&key)
         {
-            return Ok(false);
+            return Ok(None);
         }
+        let due = (
+            prayer.clone(),
+            state.saved.language,
+            location.city.name.clone(),
+        );
         let mut saved = state.saved.clone();
         saved.alerts.insert(key);
         self.persist(&saved).map_err(|e| e.to_string())?;
         state.saved = saved;
-        Ok(true)
+        Ok(Some(due))
     }
 
     fn persist(&self, saved: &Saved) -> io::Result<()> {
@@ -300,5 +308,48 @@ mod tests {
         store.update(|saved| saved.language = Language::Ar).unwrap();
         let reopened = Store::open(path).unwrap();
         assert!(matches!(reopened.snapshot().saved.language, Language::Ar));
+    }
+
+    #[test]
+    fn cached_schedule_and_alert_claim_survive_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sajda.json");
+        let store = Store::open(path.clone()).unwrap();
+        let instant = chrono::DateTime::parse_from_rfc3339("2026-11-21T16:21:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        store
+            .update(|saved| {
+                saved.location = Some(Location {
+                    city: City {
+                        id: 2998324,
+                        name: "Lille".into(),
+                        admin1: None,
+                        country: "France".into(),
+                        country_code: "FR".into(),
+                        timezone: chrono_tz::Europe::Paris,
+                        latitude: 50.63391,
+                        longitude: 3.05512,
+                    },
+                    schedule: Schedule {
+                        fetched_at: instant,
+                        prayers: vec![Occurrence {
+                            name: crate::schedule::Prayer::Maghrib,
+                            date: instant.date_naive(),
+                            time: "17:21".into(),
+                            instant,
+                        }],
+                    },
+                });
+            })
+            .unwrap();
+        let previous = instant - Duration::milliseconds(250);
+        assert!(store.claim_due(previous, instant).unwrap().is_some());
+
+        let reopened = Store::open(path).unwrap();
+        let location = reopened.snapshot().saved.location.unwrap();
+        assert_eq!(location.schedule.prayers[0].instant, instant);
+        assert!(location.needs_refresh(instant + Duration::days(2)));
+        assert!(reopened.claim_due(previous, instant).unwrap().is_none());
     }
 }

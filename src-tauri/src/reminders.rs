@@ -18,7 +18,7 @@ pub struct AlertKey {
 
 fn title(prayer: Prayer, language: Language) -> String {
     match language {
-        Language::En => format!("It’s time for {}", prayer.as_str()),
+        Language::En => format!("{} has started", prayer.as_str()),
         Language::Ar => format!(
             "حان وقت صلاة {}",
             match prayer {
@@ -32,12 +32,12 @@ fn title(prayer: Prayer, language: Language) -> String {
     }
 }
 
-fn notify(app: &AppHandle, occurrence: &Occurrence, snapshot: &Snapshot, city: &str) {
+fn notify(app: &AppHandle, occurrence: &Occurrence, language: Language, city: &str) {
     // Let Windows play its configured toast sound and honor Do Not Disturb.
     if let Err(error) = app
         .notification()
         .builder()
-        .title(title(occurrence.name, snapshot.saved.language))
+        .title(title(occurrence.name, language))
         .body(format!("{} · {}", city, occurrence.time))
         .show()
     {
@@ -45,7 +45,11 @@ fn notify(app: &AppHandle, occurrence: &Occurrence, snapshot: &Snapshot, city: &
     }
 }
 
-fn due(snapshot: &Snapshot, previous: DateTime<Utc>, now: DateTime<Utc>) -> Option<&Occurrence> {
+pub fn due(
+    snapshot: &Snapshot,
+    previous: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Option<&Occurrence> {
     let location = snapshot.saved.location.as_ref()?;
     let date = now.with_timezone(&location.city.timezone).date_naive();
     location
@@ -55,7 +59,14 @@ fn due(snapshot: &Snapshot, previous: DateTime<Utc>, now: DateTime<Utc>) -> Opti
         .find(|prayer| prayer.date == date && prayer.instant > previous && prayer.instant <= now)
 }
 
-pub fn start(app: AppHandle) {
+pub fn start(app: AppHandle) -> tauri_plugin_notification::Result<()> {
+    let handle = app.clone();
+    app.notification().on_action(move |action| {
+        if action.action_id() == "tap" {
+            let app = handle.clone();
+            let _ = handle.run_on_main_thread(move || crate::tray::show_popup(&app));
+        }
+    })?;
     tauri::async_runtime::spawn(async move {
         let mut previous = Reading::now();
         loop {
@@ -69,26 +80,16 @@ pub fn start(app: AppHandle) {
             }
             if now.may_dispatch(&previous) {
                 let store = app.state::<Store>();
-                let snapshot = store.snapshot();
-                if let (Some(location), Some(prayer)) = (
-                    &snapshot.saved.location,
-                    due(&snapshot, previous.utc, now.utc),
-                ) {
-                    let key = AlertKey {
-                        city_id: location.city.id,
-                        date: prayer.date,
-                        prayer: prayer.name,
-                    };
-                    match store.claim_alert(key, prayer.instant) {
-                        Ok(true) => notify(&app, prayer, &snapshot, &location.city.name),
-                        Ok(false) => {}
-                        Err(error) => eprintln!("Sajda could not save reminder history: {error}"),
-                    }
+                match store.claim_due(previous.utc, now.utc) {
+                    Ok(Some((prayer, language, city))) => notify(&app, &prayer, language, &city),
+                    Ok(None) => {}
+                    Err(error) => eprintln!("Sajda could not save reminder history: {error}"),
                 }
             }
             previous = now;
         }
     });
+    Ok(())
 }
 
 #[cfg(test)]

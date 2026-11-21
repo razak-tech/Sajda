@@ -198,3 +198,36 @@ async fn fetch_month(
     }
     Ok(days)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires the live city and prayer schedule services"]
+    fn lille_search_and_two_month_calendar() {
+        tauri::async_runtime::block_on(async {
+            let client = client().unwrap();
+            let cities = search(&client, "Lille", "en").await.unwrap();
+            let french = cities
+                .iter()
+                .find(|city| city.country_code == "FR")
+                .unwrap();
+            let belgian = cities
+                .iter()
+                .find(|city| city.country_code == "BE")
+                .unwrap();
+            assert_ne!(french.id, belgian.id);
+            let now = DateTime::parse_from_rfc3339("2026-10-24T12:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc);
+            let schedule = calendar(&client, french, now).await.unwrap();
+            assert_eq!(schedule.prayers.len(), 14 * 5);
+            assert_eq!(schedule.prayers[0].date.to_string(), "2026-10-24");
+            assert_eq!(
+                schedule.prayers.last().unwrap().date.to_string(),
+                "2026-11-06"
+            );
+        });
+    }
+}

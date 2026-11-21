@@ -81,6 +81,20 @@ pub fn set_menu(app: &AppHandle, arabic: bool) -> tauri::Result<()> {
     Ok(())
 }
 
+pub fn show_popup(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.emit("open-popup", ());
+        if let Some(rect) = app
+            .tray_by_id(TRAY_ID)
+            .and_then(|tray| tray.rect().ok().flatten())
+        {
+            let _ = position(&window, rect);
+        }
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn menu(app: &AppHandle, arabic: bool) -> tauri::Result<Menu<tauri::Wry>> {
     let settings = MenuItem::with_id(
         app,
@@ -162,6 +176,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
                     } else {
+                        let _ = window.emit("open-popup", ());
                         let _ = position(&window, rect);
                         let _ = window.show();
                         let _ = window.set_focus();
