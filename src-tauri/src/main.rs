@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod provider;
+mod reminders;
 mod schedule;
 mod state;
 mod tray;
@@ -39,6 +40,7 @@ fn main() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_notification::init())
         .manage(provider::client().expect("failed to initialize the network client"))
         .setup(|app| {
             let path = app.path().app_local_data_dir()?.join("state.json");
@@ -56,6 +58,7 @@ fn main() {
                 matches!(snapshot.saved.language, state::Language::Ar),
             )?;
             state::start_refresh_loop(app.handle().clone());
+            reminders::start(app.handle().clone());
             if !std::env::args().any(|arg| arg == "--autostart") {
                 let window = app
                     .get_webview_window("main")

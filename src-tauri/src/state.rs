@@ -1,11 +1,13 @@
 use crate::{
     provider::{self, City},
+    reminders::AlertKey,
     schedule::Schedule,
     tray,
 };
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs,
     io::{self, Write},
     path::PathBuf,
@@ -35,6 +37,8 @@ pub struct Saved {
     pub language: Language,
     pub startup: bool,
     pub setup_city: Option<City>,
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
+    alerts: HashSet<AlertKey>,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -44,6 +48,8 @@ pub struct Snapshot {
     pub offline: bool,
     pub refreshing: bool,
     pub revision: u64,
+    #[serde(skip)]
+    pub active_since: Option<chrono::DateTime<Utc>>,
 }
 
 pub struct Store {
@@ -79,6 +85,33 @@ impl Store {
         snapshot.saved = saved;
         snapshot.revision += 1;
         Ok(snapshot.clone())
+    }
+
+    pub fn claim_alert(
+        &self,
+        key: AlertKey,
+        instant: chrono::DateTime<Utc>,
+    ) -> Result<bool, String> {
+        let mut state = self.state.lock().expect("Sajda state lock");
+        let current = state.saved.location.as_ref().is_some_and(|location| {
+            location.city.id == key.city_id
+                && location.schedule.prayers.iter().any(|prayer| {
+                    prayer.name == key.prayer
+                        && prayer.date == key.date
+                        && prayer.instant == instant
+                })
+        });
+        if !current
+            || state.active_since.is_some_and(|since| instant <= since)
+            || state.saved.alerts.contains(&key)
+        {
+            return Ok(false);
+        }
+        let mut saved = state.saved.clone();
+        saved.alerts.insert(key);
+        self.persist(&saved).map_err(|e| e.to_string())?;
+        state.saved = saved;
+        Ok(true)
     }
 
     fn persist(&self, saved: &Saved) -> io::Result<()> {
@@ -169,6 +202,7 @@ pub fn save_location(
     saved.setup_city = None;
     store.persist(&saved).map_err(|e| e.to_string())?;
     state.saved = saved;
+    state.active_since = Some(Utc::now());
     state.offline = false;
     state.revision += 1;
     let snapshot = state.clone();
