@@ -97,6 +97,42 @@ pub async fn search(client: &Client, query: &str, language: &str) -> Result<Vec<
         .collect())
 }
 
+#[derive(Deserialize)]
+struct IpLocation {
+    city: String,
+    country_code: String,
+    timezone: Tz,
+    latitude: f64,
+    longitude: f64,
+}
+
+pub async fn detect_city(client: &Client) -> Result<City, String> {
+    let location = client
+        .get("https://ipapi.co/json/")
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .and_then(reqwest::Response::error_for_status)
+        .map_err(|error| error.to_string())?
+        .json::<IpLocation>()
+        .await
+        .map_err(|error| error.to_string())?;
+    let distance = |city: &City| {
+        let latitude = city.latitude - location.latitude;
+        let longitude = (city.longitude - location.longitude + 180.0).rem_euclid(360.0) - 180.0;
+        latitude.hypot(longitude * location.latitude.to_radians().cos())
+    };
+    search(client, &location.city, "en")
+        .await?
+        .into_iter()
+        .filter(|city| {
+            city.country_code == location.country_code && city.timezone == location.timezone
+        })
+        .filter(|city| distance(city) < 0.7)
+        .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+        .ok_or_else(|| "No matching city".into())
+}
+
 pub async fn calendar(
     client: &Client,
     city: &City,

@@ -1,6 +1,7 @@
 use crate::{
     clock::Reading,
     schedule::{Occurrence, Prayer},
+    sound::{self, Sound},
     state::{Language, Snapshot, Store},
 };
 use chrono::{DateTime, NaiveDate, Utc};
@@ -32,11 +33,13 @@ fn title(prayer: Prayer, language: Language) -> String {
     }
 }
 
-fn notify(app: &AppHandle, occurrence: &Occurrence, language: Language, city: &str) {
+fn notify(app: &AppHandle, occurrence: &Occurrence, language: Language, city: &str, sound: Sound) {
+    tauri::async_runtime::spawn(sound::preview_sound(sound));
     if let Some(window) = app.get_webview_window("edge") {
-        if window.emit("prayer-alert", occurrence).is_ok() { return; }
+        if window.emit("prayer-alert", occurrence).is_ok() {
+            return;
+        }
     }
-    // Let Windows play its configured toast sound and honor Do Not Disturb.
     if let Err(error) = app
         .notification()
         .builder()
@@ -84,7 +87,9 @@ pub fn start(app: AppHandle) -> tauri_plugin_notification::Result<()> {
             if now.may_dispatch(&previous) {
                 let store = app.state::<Store>();
                 match store.claim_due(previous.utc, now.utc) {
-                    Ok(Some((prayer, language, city))) => notify(&app, &prayer, language, &city),
+                    Ok(Some((prayer, language, city, sound))) => {
+                        notify(&app, &prayer, language, &city, sound)
+                    }
                     Ok(None) => {}
                     Err(error) => eprintln!("Sajda could not save reminder history: {error}"),
                 }

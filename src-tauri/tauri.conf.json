@@ -14,13 +14,15 @@
       {
         "label": "main",
         "title": "Sajda",
-        "width": 400,
-        "height": 375,
+        "width": 720,
+        "height": 510,
+        "create": false,
+        "center": true,
         "visible": false,
         "resizable": false,
         "decorations": false,
         "transparent": true,
-        "skipTaskbar": true,
+        "skipTaskbar": false,
         "shadow": false
       },
       {
@@ -28,6 +30,7 @@
         "title": "Sajda",
         "width": 110,
         "height": 8,
+        "create": false,
         "visible": false,
         "resizable": false,
         "decorations": false,

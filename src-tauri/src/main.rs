@@ -5,10 +5,10 @@ mod edge;
 mod provider;
 mod reminders;
 mod schedule;
+mod sound;
 mod state;
 mod tray;
 
-use std::sync::{Arc, atomic::AtomicBool};
 use tauri::Manager;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
@@ -29,6 +29,11 @@ async fn load_schedule(
     provider::calendar(&client, &city, chrono::Utc::now()).await
 }
 
+#[tauri::command]
+async fn detect_city(client: tauri::State<'_, reqwest::Client>) -> Result<provider::City, String> {
+    provider::detect_city(&client).await
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
@@ -41,7 +46,6 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_notification::init())
-        .manage(Arc::new(AtomicBool::new(false)))
         .manage(provider::client().expect("failed to initialize the network client"))
         .setup(|app| {
             let path = app.path().app_local_data_dir()?.join("state.json");
@@ -53,6 +57,13 @@ fn main() {
                 }
             }
             app.manage(store);
+            for config in &app.config().app.windows {
+                let window = tauri::WebviewWindowBuilder::from_config(app, config)?.build()?;
+                #[cfg(windows)]
+                if config.label == "edge" {
+                    edge::suppress_window_border(&window);
+                }
+            }
             tray::install(app.handle())?;
             let window = app
                 .get_webview_window("main")
@@ -77,10 +88,14 @@ fn main() {
             tray::dismiss,
             tray::fit_window,
             search_cities,
+            detect_city,
             load_schedule,
             state::get_state,
             state::save_location,
             state::save_language,
+            state::save_sound,
+            sound::preview_sound,
+            sound::edge_sound,
             state::save_startup,
             state::clear_setup,
             state::refresh_schedule

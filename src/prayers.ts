@@ -9,12 +9,20 @@ export type Occurrence = {
 
 export type Schedule = { fetched_at: string; prayers: Occurrence[] }
 
-export function nextPrayer(schedule: Schedule | null, now: number, timezone: string) {
+export const arabicPrayers: Record<Prayer, string> = {
+  Fajr: 'الفجر', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء',
+}
+
+export function localDate(now: number, timezone: string) {
   const date = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(now)
   const part = (name: string) => date.find(({ type }) => type === name)?.value
-  const today = `${part('year')}-${part('month')}-${part('day')}`
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+export function nextPrayer(schedule: Schedule | null, now: number, timezone: string) {
+  const today = localDate(now, timezone)
   const lastToday = schedule?.prayers.find(({ date, name }) => date === today && name === 'Isha')
   if (!lastToday) return null
   const next = schedule?.prayers.find(({ instant }) => Date.parse(instant) > now)

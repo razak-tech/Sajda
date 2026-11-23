@@ -2,6 +2,7 @@ use crate::{
     provider::{self, City},
     reminders::{self, AlertKey},
     schedule::{Occurrence, Schedule},
+    sound::Sound,
     tray,
 };
 use chrono::{Duration, Utc};
@@ -37,6 +38,7 @@ pub struct Saved {
     pub language: Language,
     pub startup: bool,
     pub setup_city: Option<City>,
+    pub sound: Sound,
     #[serde(skip_serializing_if = "HashSet::is_empty")]
     alerts: HashSet<AlertKey>,
 }
@@ -91,7 +93,7 @@ impl Store {
         &self,
         previous: chrono::DateTime<Utc>,
         now: chrono::DateTime<Utc>,
-    ) -> Result<Option<(Occurrence, Language, String)>, String> {
+    ) -> Result<Option<(Occurrence, Language, String, Sound)>, String> {
         let mut state = self.state.lock().expect("Sajda state lock");
         let (Some(location), Some(prayer)) =
             (&state.saved.location, reminders::due(&state, previous, now))
@@ -114,6 +116,7 @@ impl Store {
             prayer.clone(),
             state.saved.language,
             location.city.name.clone(),
+            state.saved.sound,
         );
         let mut saved = state.saved.clone();
         saved.alerts.insert(key);
@@ -144,6 +147,17 @@ fn publish(app: &AppHandle, snapshot: &Snapshot) {
 #[tauri::command]
 pub fn get_state(store: State<'_, Store>) -> Snapshot {
     store.snapshot()
+}
+
+#[tauri::command]
+pub fn save_sound(
+    app: AppHandle,
+    store: State<'_, Store>,
+    sound: Sound,
+) -> Result<Snapshot, String> {
+    let snapshot = store.update(|saved| saved.sound = sound)?;
+    publish(&app, &snapshot);
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -306,8 +320,10 @@ mod tests {
         let store = Store::open(path.clone()).unwrap();
         store.update(|saved| saved.language = Language::En).unwrap();
         store.update(|saved| saved.language = Language::Ar).unwrap();
+        store.update(|saved| saved.sound = Sound::Soft).unwrap();
         let reopened = Store::open(path).unwrap();
         assert!(matches!(reopened.snapshot().saved.language, Language::Ar));
+        assert!(matches!(reopened.snapshot().saved.sound, Sound::Soft));
     }
 
     #[test]
