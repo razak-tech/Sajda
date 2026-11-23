@@ -1,0 +1,60 @@
+:root {
+  --ink:#f7f6f7; --muted:#a9abb3; --paper:#09090b; --white:#131317; --soft:#202027;
+  --line:#34343b; --lime:#b9daaa; --error:#532e32; color-scheme:dark;
+}
+.chrome img,.notch img {filter:brightness(0) invert(1)}
+.frame.popup:has(.notch) {width:600px;padding:0;border:0;background:transparent}
+.edge {width:100vw;height:100vh;overflow:hidden}
+.edge.hidden {visibility:hidden}
+.grip {border:0;background:transparent;width:100%;height:100%;display:grid;place-items:start center;padding:0}
+.grip::after {content:"";width:100%;height:3px;background:#a6acaf;border-radius:4px}
+.left .grip,.right .grip {align-items:center;justify-items:start}
+.right .grip {justify-items:end}
+.left .grip::after,.right .grip::after {width:3px;height:100%}
+.notch {position:relative;background:#020203;color:#fafafa;border-radius:0 0 30px 30px;height:150px;padding:12px 24px 18px;font-family:inherit}
+.edge.top.panel {padding-inline:12px}
+.edge.top .notch::before,.edge.top .notch::after {content:"";position:absolute;top:0;width:12px;height:12px}
+.edge.top .notch::before {right:100%;background:radial-gradient(circle at 0 100%,transparent 11px,#020203 12px)}
+.edge.top .notch::after {left:100%;background:radial-gradient(circle at 100% 100%,transparent 11px,#020203 12px)}
+.notch header {display:flex;align-items:center;gap:8px;font-size:17px}
+.notch header>img {width:18px}
+.notch header button {margin-inline-start:auto;border:0;background:transparent;border-radius:8px;width:30px;height:30px}
+.notch header button:hover {background:#29292f}
+.notch header button img {width:17px}
+.notch-body {display:flex;align-items:center;gap:12px;margin-top:8px}
+.next h2 {font-size:30px;line-height:1.15;letter-spacing:-.04em}
+.next time {font-size:19px;color:#ceced4;font-variant-numeric:tabular-nums}
+.notch small {text-transform:uppercase;font-size:9px;letter-spacing:.07em;color:#c1c1c8}
+.times {display:flex;justify-content:space-between;align-items:center;gap:7px;flex:1;margin-inline-start:6px;border-inline-start:1px solid #353539;padding:11px 0 11px 13px}
+.times div {display:grid;gap:6px;text-align:center}
+.times time {font-size:15px;font-variant-numeric:tabular-nums}
+.left .notch,.right .notch {height:100%;border-radius:0 24px 24px 0}
+.right .notch {border-radius:24px 0 0 24px}
+.left .notch-body,.right .notch-body {display:grid;grid-template-columns:58px 1fr}
+.left .times,.right .times {grid-column:span 2;margin:0;padding:16px 0;border:0;border-top:1px solid #333}
+.edge-options {display:flex;background:#15151b;border:1px solid #42424a;border-radius:30px;padding:4px;margin:6px 0}
+.edge-options button {flex:1;border:0;border-radius:30px;text-transform:capitalize;background:transparent;padding:7px}
+.edge-options button[aria-pressed=true] {background:#60606e;color:white}
+.scene {position:relative;isolation:isolate;overflow:hidden;background-color:#080c14}
+.toast {width:100%;height:100%;border:1px solid #ffffff36;border-radius:24px;text-align:start;padding:14px 28px;color:#fff;animation:appear .24s ease-out}
+.toast small,.toast strong {display:block;position:relative;z-index:2}
+.toast strong {font-size:34px;letter-spacing:-.045em}
+.toast small::before {content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-end:8px;background:var(--glow);box-shadow:0 0 10px var(--glow)}
+.scene {background-image:linear-gradient(90deg,#05080ef5,transparent 78%),radial-gradient(ellipse at 79% 100%,var(--glow),var(--sky) 50%,#0d1018 90%)}
+.Fajr {--glow:#92f2fa;--sky:#11627b}
+.Dhuhr {--glow:#ffd176;--sky:#925b19}
+.Asr {--glow:#ffbf65;--sky:#7d4920;background-image:linear-gradient(90deg,#090a0d 18%,transparent),repeating-conic-gradient(from 174deg at 96% -80%,#ffc568 0deg,#744620 5deg,#3b271a 9deg)}
+.Maghrib {--glow:#ff9b67;--sky:#914866}
+.Isha {--glow:#aaa3ff;--sky:#282762}
+.Fajr::before,.Dhuhr::before,.Maghrib::before {content:"";position:absolute;right:13%;bottom:18%;width:32px;height:32px;border-radius:50%;background:#ffe5a0;box-shadow:0 0 18px var(--glow)}
+.Dhuhr::before {width:64px;height:64px}
+.scene::after {content:"";position:absolute;inset:62% 0 0;background:#111426aa;clip-path:polygon(0 60%,17% 69%,31% 42%,44% 62%,63% 28%,74% 58%,89% 36%,100% 12%,100% 100%,0 100%)}
+.Isha::before {content:"☾";position:absolute;right:11%;top:9%;font-size:48px;color:#e3ddff;text-shadow:0 0 15px #ada1ff}
+.arch {width:58px;height:78px;border-radius:52% 52% 3px 3px;flex:none}
+.arch span {position:absolute;z-index:2;left:8px;top:8px;font-size:12px;color:#ffe4ad}
+.arch::after {inset:38% 0 0;background:#121521;clip-path:polygon(0 68%,12% 65%,12% 40%,16% 26%,20% 40%,20% 65%,31% 62%,31% 52%,34% 39%,44% 28%,51% 12%,58% 28%,68% 39%,71% 52%,71% 62%,81% 65%,81% 43%,85% 30%,89% 43%,89% 66%,100% 70%,100% 100%,0 100%)}
+@keyframes appear {from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:no-preference){.edge.panel .notch{animation:appear .18s ease-out}}
+.left .times,.right .times {display:grid;grid-template-columns:1fr;gap:7px;padding-top:12px}
+.left .times div,.right .times div {display:flex;align-items:center;justify-content:space-between}
+.action:not(.secondary):not(.plain):not(.error) {color:#142411}

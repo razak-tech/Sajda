@@ -6,7 +6,7 @@ use crate::{
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -33,6 +33,9 @@ fn title(prayer: Prayer, language: Language) -> String {
 }
 
 fn notify(app: &AppHandle, occurrence: &Occurrence, language: Language, city: &str) {
+    if let Some(window) = app.get_webview_window("edge") {
+        if window.emit("prayer-alert", occurrence).is_ok() { return; }
+    }
     // Let Windows play its configured toast sound and honor Do Not Disturb.
     if let Err(error) = app
         .notification()

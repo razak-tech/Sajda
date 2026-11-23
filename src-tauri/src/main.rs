@@ -1,12 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod clock;
+mod edge;
 mod provider;
 mod reminders;
 mod schedule;
 mod state;
 mod tray;
 
+use std::sync::{Arc, atomic::AtomicBool};
 use tauri::Manager;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
@@ -39,6 +41,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_notification::init())
+        .manage(Arc::new(AtomicBool::new(false)))
         .manage(provider::client().expect("failed to initialize the network client"))
         .setup(|app| {
             let path = app.path().app_local_data_dir()?.join("state.json");
@@ -69,6 +72,8 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            edge::edge_layout,
+            edge::edge_settings,
             tray::dismiss,
             tray::fit_window,
             search_cities,

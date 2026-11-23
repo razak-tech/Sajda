@@ -22,6 +22,22 @@
         "transparent": true,
         "skipTaskbar": true,
         "shadow": false
+      },
+      {
+        "label": "edge",
+        "title": "Sajda",
+        "width": 110,
+        "height": 8,
+        "visible": false,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "url": "index.html",
+        "alwaysOnTop": true,
+        "focus": false,
+        "focusable": false
       }
     ],
     "security": {

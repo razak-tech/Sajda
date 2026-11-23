@@ -55,7 +55,7 @@ pub fn fit_window(
             (monitor.work_area().size.height as f64 / monitor.scale_factor()) as u32
         });
         window.set_size(LogicalSize::new(
-            width.clamp(320, 400),
+            width.clamp(320, 600),
             height.clamp(1, height_limit.max(1)),
         ))?;
         if popup {
@@ -121,7 +121,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let window = app
         .get_webview_window("main")
         .expect("main window is configured");
-    let shown_by_tray = Arc::new(AtomicBool::new(false));
+    let shown_by_tray = app.state::<Arc<AtomicBool>>().inner().clone();
     let dismiss_on_blur = shown_by_tray.clone();
     let window_for_event = window.clone();
     window.on_window_event(move |event| match event {
@@ -185,7 +185,6 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
-    app.manage(shown_by_tray);
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { EdgePicker, PrayerPanel } from './Edge'
 import { Chrome } from './Chrome'
 import { CityPicker } from './CityPicker'
 import { LanguagePicker } from './LanguagePicker'
@@ -11,7 +12,7 @@ import { nextPrayer, type Schedule } from './prayers'
 
 type View = 'popup' | 'setup' | 'startup' | 'settings' | 'picker' | 'setup-load' | 'change-load'
 type Location = { city: City; schedule: Schedule }
-type Snapshot = {
+export type Snapshot = {
   location: Location | null
   language: Language
   offline: boolean
@@ -89,7 +90,7 @@ export function App() {
       const height = Math.ceil(element.getBoundingClientRect().height)
       if (height === oldHeight) return
       oldHeight = height
-      void invoke('fit_window', { width: popup ? 360 : 400, height, popup })
+      void invoke('fit_window', { width: popup ? 600 : 400, height, popup })
     }
     const observer = new ResizeObserver(resize)
     observer.observe(element)
@@ -179,8 +180,9 @@ export function App() {
   return <main ref={frame} className={`frame${popup ? ' popup' : ''}`} onKeyDown={(event) => {
     if (event.key === 'Escape') dismiss()
   }}>
-    <Chrome ar={ar} close={dismiss} settings={popup ? () => setView('settings') : undefined} />
-    {popup && <Popup ar={ar} city={cityLabel(active.city, language)} cityName={active.city.name}
+    {(!popup || !nextPrayer(active.schedule, now, active.city.timezone)) && <Chrome ar={ar} close={dismiss} settings={popup ? () => setView('settings') : undefined} />}
+    {popup && nextPrayer(active.schedule, now, active.city.timezone) && <PrayerPanel snapshot={{ location: active, language }} now={now} settings={() => setView('settings')} />}
+    {popup && !nextPrayer(active.schedule, now, active.city.timezone) && <Popup ar={ar} city={cityLabel(active.city, language)} cityName={active.city.name}
       next={nextPrayer(active.schedule, now, active.city.timezone)} now={now} offline={offline}
       loading={refreshing} retry={() => void invoke('refresh_schedule').catch(() => undefined)} />}
     {preferenceError && !popup && <p className="notice error" role="alert">
@@ -213,6 +215,7 @@ export function App() {
     </>}
     {view === 'settings' && active && <>
       <h1>{ar ? 'الإعدادات' : 'Settings'}</h1>
+      <EdgePicker ar={ar} />
       <section className="city-card">
         <p className="caption">{ar ? 'المدينة المختارة' : 'Selected city'}</p>
         <h2><bdi>{cityLabel(active.city, language)}</bdi></h2>
