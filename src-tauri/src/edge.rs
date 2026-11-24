@@ -1,5 +1,102 @@
-use serde::Deserialize;
-use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+use serde::{Deserialize, Serialize};
+use std::{sync::Mutex, time::Duration};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+
+#[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EdgeMode {
+    Hidden,
+    Handle,
+    Panel,
+    Alert,
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EdgeAction {
+    Open,
+    Toggle,
+    Settings,
+    Close,
+}
+
+#[derive(Default)]
+pub struct PendingAction(Mutex<Option<EdgeAction>>);
+
+pub fn request_action(app: &AppHandle, action: EdgeAction) {
+    let Some(window) = app.get_webview_window("edge") else {
+        return;
+    };
+    *app.state::<PendingAction>()
+        .0
+        .lock()
+        .expect("edge action lock") = Some(action);
+    let _ = window.emit("edge-action", ());
+}
+
+#[tauri::command]
+pub fn take_edge_action(action: tauri::State<'_, PendingAction>) -> Option<EdgeAction> {
+    action.0.lock().expect("edge action lock").take()
+}
+
+#[derive(Clone, Copy)]
+struct HoverRegion {
+    origin: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+    mode: EdgeMode,
+}
+
+impl HoverRegion {
+    fn contains(self, cursor: PhysicalPosition<f64>) -> bool {
+        let x = cursor.x - f64::from(self.origin.x);
+        let y = cursor.y - f64::from(self.origin.y);
+        (0.0..f64::from(self.size.width)).contains(&x)
+            && (0.0..f64::from(self.size.height)).contains(&y)
+    }
+}
+
+#[derive(Default)]
+pub struct HoverTracker(Mutex<Option<HoverRegion>>);
+
+#[derive(Clone, PartialEq, Serialize)]
+struct HoverEvent {
+    mode: EdgeMode,
+    inside: bool,
+}
+
+pub fn start_hover_tracking(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let Some(window) = app.get_webview_window("edge") else {
+            return;
+        };
+        let mut previous = None;
+        loop {
+            let region = *app
+                .state::<HoverTracker>()
+                .0
+                .lock()
+                .expect("edge hover lock");
+            let event = region.and_then(|region| {
+                app.cursor_position().ok().map(|cursor| HoverEvent {
+                    mode: region.mode,
+                    inside: region.contains(cursor),
+                })
+            });
+            if event != previous {
+                if let Some(event) = &event {
+                    let _ = window.emit("edge-hover", event);
+                }
+                previous = event;
+            }
+            tokio::time::sleep(Duration::from_millis(if region.is_some() {
+                40
+            } else {
+                120
+            }))
+            .await;
+        }
+    });
+}
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -55,19 +152,21 @@ pub fn suppress_window_border(window: &WebviewWindow) {
 pub fn edge_layout(
     window: WebviewWindow,
     edge: String,
-    mode: String,
+    mode: EdgeMode,
     hover_size: HoverSize,
     trigger_thickness: u32,
+    interactive: bool,
 ) -> Result<(), String> {
     if window.label() != "edge" {
         return Err("Invalid window".into());
     }
-    let layout = || -> tauri::Result<()> {
-        if mode == "hidden" {
-            return window.hide();
+    let layout = || -> tauri::Result<Option<HoverRegion>> {
+        if mode == EdgeMode::Hidden {
+            window.hide()?;
+            return Ok(None);
         }
         let Some(monitor) = window.primary_monitor()? else {
-            return Ok(());
+            return Ok(None);
         };
         let area = monitor.work_area();
         let scale = monitor.scale_factor();
@@ -78,10 +177,10 @@ pub fn edge_layout(
                 (height * scale).round() as u32,
             )
         };
-        let size = match mode.as_str() {
-            "alert" => scaled(400.0, 98.0),
-            "panel" if side => scaled(270.0, 298.0),
-            "panel" => scaled(600.0, 150.0),
+        let size = match mode {
+            EdgeMode::Alert => scaled(400.0, 98.0),
+            EdgeMode::Panel if side => scaled(336.0, 408.0),
+            EdgeMode::Panel => scaled(628.0, 300.0),
             _ => trigger_size(side, hover_size, trigger_thickness, scale),
         };
         let size = PhysicalSize::new(
@@ -97,16 +196,31 @@ pub fn edge_layout(
             _ => (dx / 2, 0),
         };
         window.set_size(size)?;
-        window.set_position(PhysicalPosition::new(
-            area.position.x + x,
-            area.position.y + y,
-        ))?;
+        let origin = PhysicalPosition::new(area.position.x + x, area.position.y + y);
+        window.set_position(origin)?;
+        window.set_focusable(interactive)?;
         if !window.is_visible()? {
             window.show()?;
         }
-        Ok(())
+        if interactive && !window.is_focused()? {
+            window.set_focus()?;
+        }
+        Ok(
+            (!interactive && matches!(mode, EdgeMode::Handle | EdgeMode::Panel))
+                .then_some(HoverRegion { origin, size, mode }),
+        )
     };
-    layout().map_err(|e| e.to_string())
+    let tracker = window.state::<HoverTracker>();
+    match layout() {
+        Ok(region) => {
+            *tracker.0.lock().expect("edge hover lock") = region;
+            Ok(())
+        }
+        Err(error) => {
+            *tracker.0.lock().expect("edge hover lock") = None;
+            Err(error.to_string())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -128,14 +242,20 @@ mod tests {
             PhysicalSize::new(12, 180)
         );
     }
-}
 
-#[tauri::command]
-pub fn edge_settings(app: tauri::AppHandle) -> tauri::Result<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        window.emit("open-settings", ())?;
-        window.show()?;
-        window.set_focus()?;
+    #[test]
+    fn large_hover_region_covers_transparent_space_next_to_the_handle() {
+        let cursor = PhysicalPosition::new(-1920.0, 320.0);
+        let region = |hover_size: HoverSize| {
+            let size = trigger_size(true, hover_size, 3, 1.0);
+            HoverRegion {
+                origin: PhysicalPosition::new(-1920, 420 - size.height as i32 / 2),
+                size,
+                mode: EdgeMode::Handle,
+            }
+        };
+        assert!(!region(HoverSize::Small).contains(cursor));
+        assert!(region(HoverSize::Large).contains(cursor));
+        assert!(!region(HoverSize::Large).contains(PhysicalPosition::new(-1917.0, 320.0)));
     }
-    Ok(())
 }

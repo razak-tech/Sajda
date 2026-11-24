@@ -36,10 +36,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); out
 .chrome { display: flex; align-items: center; gap: 12px; }
 .popup .chrome { gap: 8px; }
 .brand { flex: 1; font-size: 15px; line-height: 23px; font-weight: 600; }
-.mark { position: relative; inline-size: 24px; block-size: 24px; flex: none; }
+.mark { position: relative; inline-size: 22px; block-size: 25px; flex: none; }
 .mark-niche, .mark-sun { position: absolute; display: block; }
-.mark-niche { left: 5px; top: 3px; }
-.mark-sun { left: 12.5px; top: 15.5px; }
+.mark-niche { left: 0; top: 0; }
+.mark-sun { left: 7.5px; top: 12.5px; }
 .icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; padding: 0; border-radius: 6px; background: transparent; }
 .icon:hover { background: var(--soft); }
 .icon:active { background: var(--line); }

@@ -12,20 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "main",
-        "title": "Sajda",
-        "width": 720,
-        "height": 510,
-        "create": false,
-        "center": true,
-        "visible": false,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "skipTaskbar": false,
-        "shadow": false
-      },
-      {
         "label": "edge",
         "title": "Sajda",
         "width": 110,

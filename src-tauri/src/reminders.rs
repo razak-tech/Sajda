@@ -70,7 +70,9 @@ pub fn start(app: AppHandle) -> tauri_plugin_notification::Result<()> {
     app.notification().on_action(move |action| {
         if action.action_id() == "tap" {
             let app = handle.clone();
-            let _ = handle.run_on_main_thread(move || crate::tray::show_popup(&app));
+            let _ = handle.run_on_main_thread(move || {
+                crate::edge::request_action(&app, crate::edge::EdgeAction::Open);
+            });
         }
     })?;
     tauri::async_runtime::spawn(async move {

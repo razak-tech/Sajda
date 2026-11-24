@@ -1,21 +1,29 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { EdgePicker } from './Edge'
-import { Chrome } from './Chrome'
+import { Edge } from './Edge'
 import { CityPicker } from './CityPicker'
 import { LanguagePicker } from './LanguagePicker'
-import { Popup } from './Popup'
+import { PrayerPanel } from './PrayerPanel'
 import { StartupSwitch } from './StartupSwitch'
 import { cityLabel, type City, type Language } from './cities'
-import { nextPrayer, type Schedule } from './prayers'
+import type { Schedule } from './prayers'
+import lightIcon from './assets/lucide-sun.svg'
+import darkIcon from './assets/lucide-moon.svg'
 
-type View = 'popup' | 'setup' | 'startup' | 'settings' | 'picker' | 'setup-load' | 'change-load'
+type View = 'prayers' | 'setup' | 'startup' | 'settings' | 'picker' | 'setup-load' | 'change-load'
 type Location = { city: City; schedule: Schedule }
 type Sound = 'chime' | 'soft' | 'silent'
 type Theme = 'light' | 'dark'
+const settingsSections = [
+  { id: 'general', en: 'General', ar: 'عام' },
+  { id: 'appearance', en: 'Appearance', ar: 'المظهر' },
+  { id: 'location', en: 'Location', ar: 'الموقع' },
+  { id: 'notifications', en: 'Notifications', ar: 'التنبيهات' },
+  { id: 'edge', en: 'Screen edge', ar: 'حافة الشاشة' },
+] as const
 type Detection = { phase: 'idle' | 'loading' | 'failed' } | { phase: 'found'; city: City }
-export type Snapshot = {
+type Snapshot = {
   location: Location | null
   language: Language
   offline: boolean
@@ -27,7 +35,8 @@ export type Snapshot = {
 }
 
 export function App() {
-  const [view, setView] = useState<View>('setup')
+  const [view, setView] = useState<View>(() => isTauri() ? 'prayers' : 'setup')
+  const [settingsSection, setSettingsSection] = useState<(typeof settingsSections)[number]['id']>('general')
   const [language, setLanguage] = useState<Language>('en')
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem('sajda.theme')
@@ -49,43 +58,35 @@ export function App() {
   const [savingSound, setSavingSound] = useState(false)
   const [detection, setDetection] = useState<Detection>({ phase: 'idle' })
   const [ready, setReady] = useState(!isTauri())
-  const [now, setNow] = useState(Date.now)
   const request = useRef(0)
   const revision = useRef(-1)
-  const frame = useRef<HTMLElement>(null)
   const ar = language === 'ar'
-  const popup = view === 'popup' && active !== null
   const errorLabel = ar ? 'إعادة المحاولة' : 'Retry'
   const changeLabel = ar ? 'تغيير المدينة' : 'Change city'
   const cancelLabel = ar ? 'إلغاء' : 'Cancel'
+  const sectionTitle = settingsSections.find(({ id }) => id === settingsSection)?.[ar ? 'ar' : 'en']
 
   useEffect(() => {
-    const tick = () => setNow(Date.now())
-    const interval = window.setInterval(tick, 250)
-    window.addEventListener('focus', tick)
+    if (!isTauri()) return
     let disposed = false
-    const listeners = isTauri() ? Promise.all([
-      listen<Snapshot>('state-changed', ({ payload }) => applySnapshot(payload)),
-      listen('open-settings', () => {
-        setView((current) => current === 'popup' ? 'settings' : current)
-      }),
-      listen('open-popup', () => {
-        setView((current) => ['settings', 'picker', 'change-load'].includes(current) ? 'popup' : current)
-      }),
-    ]) : Promise.resolve([])
-    if (isTauri()) void listeners.then(() => invoke<Snapshot>('get_state')).then((snapshot) => {
+    const listener = listen<Snapshot>('state-changed', ({ payload }) => applySnapshot(payload))
+    void listener.then(() => invoke<Snapshot>('get_state')).then((snapshot) => {
       if (disposed) return
       applySnapshot(snapshot)
-      if (snapshot.location) setView('popup')
-      else if (snapshot.setup_city) void load(snapshot.setup_city, true)
-    }).catch(() => setPreferenceError(true)).finally(() => {
+      if (snapshot.location) return
+      if (snapshot.setup_city) void load(snapshot.setup_city, true)
+      else setView('setup')
+    }).catch(() => {
+      if (!disposed) {
+        setView('setup')
+        setPreferenceError(true)
+      }
+    }).finally(() => {
       if (!disposed) setReady(true)
     })
     return () => {
       disposed = true
-      window.removeEventListener('focus', tick)
-      clearInterval(interval)
-      void listeners.then((stops) => stops.forEach((stop) => stop()))
+      void listener.then((stop) => stop()).catch(() => undefined)
     }
   }, [])
 
@@ -93,21 +94,6 @@ export function App() {
     document.documentElement.lang = language
     document.documentElement.dir = ar ? 'rtl' : 'ltr'
   }, [language, ar])
-
-  useLayoutEffect(() => {
-    const element = frame.current
-    if (!element || !isTauri()) return
-    let oldHeight = 0
-    const resize = () => {
-      const height = Math.ceil(element.getBoundingClientRect().height)
-      if (height === oldHeight) return
-      oldHeight = height
-      void invoke('fit_window', { height }).catch(() => undefined)
-    }
-    const observer = new ResizeObserver(resize)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
 
   function applySnapshot(snapshot: Snapshot) {
     if (snapshot.revision <= revision.current) return
@@ -192,7 +178,7 @@ export function App() {
       const snapshot = await invoke<Snapshot>('save_location', { location: { city, schedule } })
       applySnapshot(snapshot)
       setDetection({ phase: 'idle' })
-      setView((current) => setup || current === 'popup' ? 'popup' : 'settings')
+      setView((current) => setup || current === 'prayers' ? 'prayers' : 'settings')
     } catch {
       if (request.current === id) setFailed(true)
     } finally {
@@ -219,8 +205,12 @@ export function App() {
     setView(active ? 'settings' : 'setup')
   }
 
-  function dismiss() {
-    if (isTauri()) void invoke('dismiss')
+  function showPrayers() {
+    setView((current) => current === 'settings' || current === 'picker' || current === 'change-load' ? 'prayers' : current)
+  }
+
+  function showSettings() {
+    setView((current) => current === 'prayers' ? 'settings' : current)
   }
 
   const locationDetection = (setup: boolean) => isTauri() && <div className="detection">
@@ -244,27 +234,37 @@ export function App() {
     </>}
   </div>
 
-  return <main ref={frame} data-theme={theme} className={`frame app-window ${popup ? 'dashboard' : view === 'settings' ? 'settings-view' : 'setup-view'}`} onKeyDown={(event) => {
-    if (event.key === 'Escape') dismiss()
-  }}>
-    <Chrome ar={ar} close={dismiss} theme={theme} changeTheme={() => {
-      const nextTheme = theme === 'dark' ? 'light' : 'dark'
-      localStorage.setItem('sajda.theme', nextTheme)
-      setTheme(nextTheme)
-    }} settings={popup ? () => setView('settings') : undefined} />
-    {popup && <Popup ar={ar} city={cityLabel(active.city, language)} cityName={active.city.name} timezone={active.city.timezone} schedule={active.schedule}
-      next={nextPrayer(active.schedule, now, active.city.timezone)} now={now} offline={offline}
+  const back = view === 'settings' ? showPrayers
+    : view === 'picker' || (view === 'change-load' && !committing) ? () => void cancel()
+    : undefined
+
+  return <Edge ar={ar} ready={ready} hasLocation={Boolean(active)} view={view} theme={theme} back={back}
+    showSettings={showSettings} showPrayers={showPrayers}
+    renderPrayers={(now, settings) => active && <PrayerPanel ar={ar} settings={settings}
+      city={cityLabel(active.city, language)} timezone={active.city.timezone} schedule={active.schedule}
+      now={now} offline={offline}
       loading={refreshing} retry={() => void invoke('refresh_schedule').catch(() => undefined)} />}
-    {preferenceError && !popup && <p className="notice error" role="alert">
+    renderWorkspace={(edgeSettings) => <>
+    {preferenceError && <p className="notice error" role="alert">
       {ar ? 'تعذّر حفظ التفضيلات أو قراءتها.' : 'Couldn’t save or read your preferences.'}
     </p>}
     {ready && view === 'setup' && <>
       <p className="note">{ar ? 'الإعداد · ١ من ٣' : 'SETUP / 1 OF 3'}</p>
       <h1>{ar ? 'اختر مدينتك' : 'Choose your city'}</h1>
       <p className="description">{ar ? 'مواقيت الصلاة حسب التوقيت المحلي لمدينتك.' : 'Prayer times in your city’s local time.'}</p>
-      <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
-      {locationDetection(true)}
-      <CityPicker key={language} language={language} select={selectSetupCity} />
+      <section className="settings-card setup-section" aria-label={ar ? 'اللغة' : 'Language'}>
+        <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
+      </section>
+      <div className="setup-options">
+        <section className="settings-card setup-section">
+          <h2>{ar ? 'البحث عن مدينة' : 'Find a city'}</h2>
+          <CityPicker key={language} language={language} select={selectSetupCity} />
+        </section>
+        {isTauri() && <section className="settings-card setup-section">
+          <h2>{ar ? 'الموقع التقريبي' : 'Approximate location'}</h2>
+          {locationDetection(true)}
+        </section>}
+      </div>
     </>}
     {view === 'startup' && candidate && <>
       <p className="note">{ar ? 'الإعداد · ٢ من ٣' : 'SETUP / 2 OF 3'}</p>
@@ -281,19 +281,23 @@ export function App() {
       </button>
     </>}
     {view === 'settings' && active && <>
-      <div className="settings-heading">
-        <h1>{ar ? 'الإعدادات' : 'Settings'}</h1>
-        <button className="action secondary" onClick={() => setView('popup')}>{ar ? 'مواقيت الصلاة' : 'Prayer times'}</button>
-      </div>
-      <div className="settings-grid">
-        <section className="settings-card">
-          <h2>{ar ? 'الموقع' : 'Location'}</h2>
+      <h1>{ar ? 'الإعدادات' : 'Settings'}</h1>
+      <div className="settings-layout">
+        <nav className="settings-menu" aria-label={ar ? 'أقسام الإعدادات' : 'Settings sections'}>
+          {settingsSections.map((section) => <button key={section.id}
+            aria-current={settingsSection === section.id ? 'true' : undefined}
+            onClick={() => setSettingsSection(section.id)}>
+            {ar ? section.ar : section.en}
+          </button>)}
+        </nav>
+        <section className="settings-card" aria-labelledby="settings-section-title">
+          <h2 id="settings-section-title">{sectionTitle}</h2>
+          {settingsSection === 'location' && <>
           <p className="caption"><bdi>{cityLabel(active.city, language)}</bdi></p>
           <button className="action secondary" onClick={() => setView('picker')}>{changeLabel}</button>
           {locationDetection(false)}
-        </section>
-        <section className="settings-card">
-          <h2>{ar ? 'التنبيهات' : 'Notifications'}</h2>
+          </>}
+          {settingsSection === 'notifications' && <>
           <label className="sound-choice">{ar ? 'صوت التنبيه' : 'Reminder sound'}
             <select value={sound} disabled={savingSound} onChange={(event) => void chooseSound(event.target.value as Sound)}>
               <option value="chime">{ar ? 'جرس' : 'Chime'}</option>
@@ -303,15 +307,22 @@ export function App() {
           </label>
           <button className="action secondary" disabled={savingSound || sound === 'silent'}
             onClick={() => void invoke('preview_sound', { sound }).catch(() => setPreferenceError(true))}>{ar ? 'استمع للصوت' : 'Preview sound'}</button>
-        </section>
-        <section className="settings-card">
-          <h2>{ar ? 'حافة الشاشة' : 'Screen edge'}</h2>
-          <EdgePicker ar={ar} />
-        </section>
-        <section className="settings-card">
-          <h2>{ar ? 'عام' : 'General'}</h2>
+          </>}
+          {settingsSection === 'edge' && edgeSettings}
+          {settingsSection === 'general' && <>
           <StartupSwitch ar={ar} enabled={startup} disabled={savingStartup} change={(value) => void saveStartup(value)} />
           <LanguagePicker language={language} select={(choice) => void chooseLanguage(choice)} />
+          </>}
+          {settingsSection === 'appearance' && <div className="theme-options" role="group" aria-label={ar ? 'مظهر التطبيق' : 'App theme'}>
+            {(['light', 'dark'] as const).map((option) => <button key={option} aria-pressed={theme === option}
+              onClick={() => {
+                localStorage.setItem('sajda.theme', option)
+                setTheme(option)
+              }}>
+              <img src={option === 'light' ? lightIcon : darkIcon} alt="" />
+              {option === 'light' ? (ar ? 'فاتح' : 'Light') : (ar ? 'داكن' : 'Dark')}
+            </button>)}
+          </div>}
         </section>
       </div>
     </>}
@@ -342,5 +353,5 @@ export function App() {
       </>}
       {(active || failed) && <button className="action secondary" disabled={committing} onClick={cancel}>{active ? cancelLabel : changeLabel}</button>}
     </>}
-  </main>
+  </>} />
 }

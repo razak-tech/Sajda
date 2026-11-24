@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { useCallback, useEffect, useEffectEvent, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { Snapshot } from './App'
-import { arabicPrayers as arabic, countdown, localDate, nextPrayer, type Occurrence } from './prayers'
-import gear from './assets/Settings.svg'
-import niche from './assets/PrayerNiche.svg'
+import { arabicPrayers, type Occurrence } from './prayers'
+import { prayerArtwork } from './prayerArtwork'
+import { Chrome } from './Chrome'
 
 const edges = ['top', 'left', 'right', 'off'] as const
 const labels = ['أعلى', 'يسار', 'يمين', 'إيقاف']
@@ -19,7 +18,7 @@ const maxTrigger = 12
 function edgePreferences() {
   const savedThickness = Number(localStorage.getItem('sajda.edge.trigger-thickness') ?? 3)
   return {
-    position: edges.find((value) => value === localStorage.getItem('sajda.edge')) ?? 'top',
+    position: edges.find((value) => value === localStorage.getItem('sajda.edge')) ?? 'right',
     radius: radii.find((value) => value === Number(localStorage.getItem('sajda.edge.radius'))) ?? 14,
     delay: localStorage.getItem('sajda.edge.delay') === '0' ? 0 : 180,
     sounds: localStorage.getItem('sajda.edge.sounds') === 'true',
@@ -28,11 +27,12 @@ function edgePreferences() {
   }
 }
 
-export function EdgePicker({ ar }: { ar: boolean }) {
-  const [prefs, setPrefs] = useState(edgePreferences)
+type EdgePrefs = ReturnType<typeof edgePreferences>
+
+export function EdgePicker({ ar, prefs, onChange }: { ar: boolean; prefs: EdgePrefs; onChange: (prefs: EdgePrefs) => void }) {
   function save(key: string, value: string) {
     localStorage.setItem(key, value)
-    setPrefs(edgePreferences())
+    onChange(edgePreferences())
   }
   return <div className="edge-settings">
     <div className="edge-options" role="group" aria-label={ar ? 'موضع الحافة' : 'Edge position'}>
@@ -80,100 +80,165 @@ export function EdgePicker({ ar }: { ar: boolean }) {
   </div>
 }
 
-type PanelProps = { snapshot: Pick<Snapshot,'location'|'language'>; now: number; settings: () => void }
-export function PrayerPanel({ snapshot, now, settings }: PanelProps) {
-  const location = snapshot.location
-  if (!location) return null
-  const ar = snapshot.language === 'ar'
-  const next = nextPrayer(location.schedule,now,location.city.timezone)
-  const day = localDate(now, location.city.timezone)
-  const times = location.schedule.prayers.filter(p => p.date === day)
-  return <section className="notch" dir={ar ? 'rtl' : 'ltr'}>
-    <header><img src={niche} alt=""/><strong>{ar ? 'سجدة' : 'Sajda'}</strong><button aria-label={ar ? 'الإعدادات' : 'Settings'} onClick={settings}><img src={gear} alt=""/></button></header>
-    <div className="notch-body"><div className={`arch scene ${next?.name ?? 'Isha'}`} aria-hidden><span>☾</span></div>
-      <div className="next"><small>{ar ? 'الصلاة القادمة' : 'Next prayer'}</small><h2>{next ? ar ? arabic[next.name] : next.name : '—'}</h2><time dir="ltr">{next ? countdown(next.instant,now) : '—'}</time></div>
-      <div className="times">{times.map(p => <div key={p.name}><small>{ar ? arabic[p.name] : p.name}</small><time>{p.time}</time></div>)}</div>
-    </div>
-  </section>
+type EdgeHover = { mode: 'handle' | 'panel'; inside: boolean }
+type EdgeAction = 'open' | 'toggle' | 'settings' | 'close'
+type EdgeProps = {
+  ar: boolean
+  ready: boolean
+  hasLocation: boolean
+  view: string
+  theme: 'light' | 'dark'
+  showSettings: () => void
+  showPrayers: () => void
+  back: (() => void) | undefined
+  renderWorkspace: (edgeSettings: ReactNode) => ReactNode
+  renderPrayers: (now: number, settings: () => void) => ReactNode
 }
 
-export function Edge() {
-  const [snapshot,update] = useState<Snapshot|null>(null)
+export function Edge({ ar, ready, hasLocation, view, theme, showSettings, showPrayers,
+  back, renderWorkspace, renderPrayers }: EdgeProps) {
   const [prefs, setPrefs] = useState(edgePreferences)
-  const [opened,open] = useState(false)
-  const [closing, setClosing] = useState(false)
+  const [lastEdge, setLastEdge] = useState(prefs.position === 'off' ? 'right' : prefs.position)
+  const [opened, open] = useState(false)
+  const [pinned, setPinned] = useState(!isTauri())
+  const [activation, setActivation] = useState(0)
+  const [closing, setClosing] = useState<'hover' | 'manual' | null>(null)
+  const [pointer, setPointer] = useState<EdgeHover | null>(null)
   const [alert,notify] = useState<Occurrence|null>(null)
   const [now,tick] = useState(Date.now)
+  const frame = useRef<HTMLElement>(null)
   const hover = useRef<number | undefined>(undefined)
-  const leave = useRef<number | undefined>(undefined)
   const { hoverSize, triggerThickness } = prefs
-  const edge = prefs.position
+  const collapse = useCallback(() => {
+    clearTimeout(hover.current)
+    setClosing(null)
+    open(false)
+    setPointer(null)
+  }, [])
+  function close() {
+    clearTimeout(hover.current)
+    setClosing('manual')
+  }
+  function navigate(changeView: () => void) {
+    clearTimeout(hover.current)
+    setClosing(null)
+    changeView()
+    setPinned(true)
+  }
+  const handleAction = useEffectEvent((action: EdgeAction | null) => {
+    if (!action) return
+    notify(null)
+    if (action === 'close' || (action === 'toggle' && pinned)) {
+      if (pinned || opened) close()
+    } else {
+      navigate(action === 'settings' ? showSettings : showPrayers)
+      setActivation((previous) => previous + 1)
+    }
+  })
+  const handleAlert = useEffectEvent((occurrence: Occurrence) => {
+    notify(occurrence)
+    if (!pinned) collapse()
+  })
   useEffect(() => {
-    const reset = () => {
-      clearTimeout(hover.current)
-      clearTimeout(leave.current)
-      setClosing(false)
-      open(false)
-    }
-    const store = (event: StorageEvent) => {
-      if (event.key && event.key !== 'sajda.edge' && !event.key.startsWith('sajda.edge.')) return
-      setPrefs(edgePreferences())
-      if (!event.key || event.key === 'sajda.edge') reset()
-    }
-    window.addEventListener('storage',store)
-    const apply = (s:Snapshot) => update(previous => previous && previous.revision > s.revision ? previous : s)
-    const listeners = Promise.all([listen<Snapshot>('state-changed',e => apply(e.payload)),listen<Occurrence>('prayer-alert',e => { notify(e.payload); reset() })])
-    void listeners.then(() => invoke<Snapshot>('get_state')).then(apply).catch(() => undefined)
+    if (!isTauri()) return
+    let disposed = false
+    const readAction = () => void invoke<EdgeAction | null>('take_edge_action').then((action) => {
+      if (!disposed) handleAction(action)
+    }).catch(() => undefined)
+    const listeners = Promise.all([
+      listen('edge-action', readAction),
+      listen<Occurrence>('prayer-alert', (event) => handleAlert(event.payload)),
+      listen<EdgeHover>('edge-hover', (event) => setPointer(event.payload)),
+    ])
+    void listeners.then(readAction).catch(() => undefined)
     return () => {
-      window.removeEventListener('storage', store)
-      void listeners.then((stops) => stops.forEach((stop) => stop()))
+      disposed = true
+      void listeners.then((stops) => stops.forEach((stop) => stop())).catch(() => undefined)
       clearTimeout(hover.current)
-      clearTimeout(leave.current)
     }
   },[])
+  function updatePrefs(next: EdgePrefs) {
+    setPrefs(next)
+    if (next.position !== 'off') setLastEdge(next.position)
+  }
+  const edge = prefs.position === 'off' && pinned ? lastEdge : prefs.position
+  const workspace = !hasLocation || view !== 'prayers'
+  const mode = !ready ? 'hidden'
+    : pinned ? 'panel'
+    : alert ? 'alert'
+    : !hasLocation || edge === 'off' ? 'hidden'
+    : opened ? 'panel' : 'handle'
+  const interactive = pinned && mode === 'panel'
+  const showingPrayers = mode === 'panel' && !workspace
   useEffect(() => {
-    if (!opened) return
+    if (interactive) frame.current?.focus({ preventScroll: true })
+  }, [interactive, activation])
+  useEffect(() => {
+    if (interactive && !frame.current?.contains(document.activeElement)) {
+      frame.current?.focus({ preventScroll: true })
+    }
+  }, [interactive, view])
+  useEffect(() => {
+    if (!showingPrayers) return
     tick(Date.now())
     const timer = setInterval(()=>tick(Date.now()),500)
     return ()=>clearInterval(timer)
-  },[opened])
+  },[showingPrayers])
   useEffect(()=>{
     if (!alert) return
     const id=setTimeout(()=>notify(null),9000)
     return ()=>clearTimeout(id)
   },[alert])
-  const mode = alert ? 'alert' : !snapshot?.location || edge === 'off' ? 'hidden' : opened ? 'panel' : 'handle'
   useEffect(() => {
-    void invoke('edge_layout', { edge, mode, hoverSize, triggerThickness }).catch(() => undefined)
-  }, [edge, mode, hoverSize, triggerThickness])
-  const ar = snapshot?.language === 'ar'
-  function showPanel() {
+    if (isTauri()) void invoke('edge_layout', { edge, mode, hoverSize, triggerThickness, interactive }).catch(() => undefined)
+  }, [edge, mode, hoverSize, triggerThickness, interactive, activation])
+  const showPanel = useCallback(() => {
     clearTimeout(hover.current)
-    setClosing(false)
+    setClosing(null)
     open(true)
-    if (prefs.sounds) void invoke('edge_sound', { expanding: true }).catch(() => undefined)
-  }
-  function enter() {
-    clearTimeout(leave.current)
-    setClosing(false)
-    if (mode === 'handle') hover.current = window.setTimeout(showPanel, prefs.delay)
-  }
-  function exit() {
-    clearTimeout(hover.current)
-    if (mode !== 'panel') return
-    setClosing(true)
+    if (prefs.sounds && isTauri()) void invoke('edge_sound', { expanding: true }).catch(() => undefined)
+  }, [prefs.sounds])
+  useEffect(() => {
+    if (!closing) return
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    leave.current = window.setTimeout(() => {
-      open(false)
-      setClosing(false)
-      if (prefs.sounds) void invoke('edge_sound', { expanding: false }).catch(() => undefined)
-    }, reducedMotion ? 0 : 180)
-  }
-  const settings = () => { exit(); void invoke('edge_settings').catch(() => undefined) }
+    const timer = window.setTimeout(() => {
+      setPinned(false)
+      collapse()
+      if (prefs.sounds && isTauri()) void invoke('edge_sound', { expanding: false }).catch(() => undefined)
+    }, reducedMotion ? 0 : 230)
+    return () => clearTimeout(timer)
+  }, [closing, collapse, prefs.sounds])
+  useEffect(() => {
+    if (interactive || closing === 'manual' || pointer?.mode !== mode) return
+    if (pointer.inside) {
+      setClosing(null)
+      if (mode === 'handle') hover.current = window.setTimeout(showPanel, prefs.delay)
+    } else if (mode === 'panel') {
+      setClosing('hover')
+    }
+    return () => clearTimeout(hover.current)
+  }, [pointer, mode, interactive, closing, prefs.delay, showPanel])
+  const alertName = alert && (ar ? arabicPrayers[alert.name] : alert.name)
+  const reminder = alert && <button type="button" className={'reminder ' + alert.name} onClick={() => notify(null)}
+    aria-label={ar ? `إغلاق تذكير ${alertName}، ${alert.time}` : `Dismiss ${alertName} reminder, ${alert.time}`}>
+    <img className="reminder-art" src={prayerArtwork[alert.name]} alt="" />
+    <small>{ar ? 'حان وقت الصلاة' : 'Time to pray'} · <bdi>{alert.time}</bdi></small>
+    <strong>{alertName}</strong>
+  </button>
   return <div className={['edge', edge, mode, closing ? 'closing' : ''].join(' ')}
-    dir={ar ? 'rtl' : 'ltr'} style={{ '--edge-radius': `${prefs.radius}px` } as CSSProperties} onMouseEnter={enter} onMouseLeave={exit}>
+    dir={ar ? 'rtl' : 'ltr'} style={{ '--edge-radius': `${prefs.radius}px` } as CSSProperties}>
     {mode==='handle' && <button className="grip" aria-label={ar ? 'فتح سجدة' : 'Open Sajda'} onClick={showPanel}/>}
-    {mode==='panel' && snapshot && <PrayerPanel snapshot={snapshot} now={now} settings={settings}/>}
-    {alert && <button className={'toast scene '+alert.name} onClick={()=>notify(null)} aria-label="Dismiss reminder"><small>{snapshot?.language==='ar' ? 'حان وقت الصلاة' : 'Time to pray'} · {alert.time}</small><strong>{snapshot?.language==='ar' ? arabic[alert.name] : alert.name}</strong></button>}
+    {mode==='panel' && <main ref={frame} tabIndex={-1} className="app-window" data-theme={theme}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && !event.defaultPrevented) (back ?? close)()
+      }}>
+      <Chrome ar={ar} prayers={hasLocation && workspace ? () => navigate(showPrayers) : undefined} close={close} />
+      {reminder && <div className="edge-notice" role="status">{reminder}</div>}
+      <div key={view} tabIndex={0} className={'panel-content ' + (workspace ? 'workspace-content' : '')}>
+        {workspace ? renderWorkspace(<EdgePicker ar={ar} prefs={prefs} onChange={updatePrefs} />)
+          : renderPrayers(now, () => navigate(showSettings))}
+      </div>
+    </main>}
+    {mode==='alert' && <div className="toast" role="status">{reminder}</div>}
   </div>
 }

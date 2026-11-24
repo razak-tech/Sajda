@@ -38,7 +38,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             if !args.iter().any(|arg| arg == "--autostart") {
-                tray::show_popup(app);
+                edge::request_action(app, edge::EdgeAction::Open);
             }
         }))
         .plugin(tauri_plugin_autostart::init(
@@ -46,6 +46,8 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_notification::init())
+        .manage(edge::HoverTracker::default())
+        .manage(edge::PendingAction::default())
         .manage(provider::client().expect("failed to initialize the network client"))
         .setup(|app| {
             let path = app.path().app_local_data_dir()?.join("state.json");
@@ -66,8 +68,8 @@ fn main() {
             }
             tray::install(app.handle())?;
             let window = app
-                .get_webview_window("main")
-                .expect("main window is configured");
+                .get_webview_window("edge")
+                .expect("edge window is configured");
             #[cfg(windows)]
             clock::install(&window)?;
             tray::set_menu(
@@ -75,18 +77,16 @@ fn main() {
                 matches!(snapshot.saved.language, state::Language::Ar),
             )?;
             state::start_refresh_loop(app.handle().clone());
+            edge::start_hover_tracking(app.handle().clone());
             reminders::start(app.handle().clone())?;
             if !std::env::args().any(|arg| arg == "--autostart") {
-                window.show()?;
-                window.set_focus()?;
+                edge::request_action(app.handle(), edge::EdgeAction::Open);
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             edge::edge_layout,
-            edge::edge_settings,
-            tray::dismiss,
-            tray::fit_window,
+            edge::take_edge_action,
             search_cities,
             detect_city,
             load_schedule,
