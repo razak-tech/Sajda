@@ -65,10 +65,10 @@
   color:var(--ink);color-scheme:light;
 }
 .app-window[data-theme=dark] {
-  --paper:#24170f; --ink:#fff3e6; --muted:#e6c9b0; --line:#604637;
-  --white:#312017; --soft:#412b1e; --lime:#ffd77a; --accent-ink:#2d190e; --error:#5a302e;
-  --focus:#ffd77a; --hero:#603d27; --hero-wash:#5b3826c7; --ring-track:#edd0b38c;
-  --clock-face:#25160ed9; --row-active:#674a29; --clock-pill:#60422f;
+  --paper:#000; --ink:#fafafa; --muted:#b8b8bf; --line:#333;
+  --white:#000; --soft:#141414; --lime:#fafafa; --accent-ink:#000; --error:#2b1212;
+  --focus:#fafafa; --hero:#000; --hero-wash:#000d; --hero-edge:#0008; --ring-track:#464646;
+  --clock-face:#000; --row-active:#202020; --clock-pill:#1c1c1c; --countdown-ink:var(--ink);
   color-scheme:dark;
 }
 .app-window .action:not(.secondary):not(.plain):not(.error) {color:var(--accent-ink)}
@@ -79,7 +79,8 @@
 .app-window .chrome .icon {border-radius:50%;width:36px;height:36px;background:var(--soft)}
 .app-window .chrome .icon:hover {background:var(--clock-pill)}
 .app-window .chrome .icon img,.dashboard-location img {width:19px;height:19px;filter:brightness(0) saturate(100%) invert(13%) sepia(25%) saturate(1336%) hue-rotate(343deg)}
-.app-window[data-theme=dark] .chrome .icon img,.app-window[data-theme=dark] .dashboard-location img {filter:brightness(0) invert(93%)}
+.app-window[data-theme=dark] :is(.chrome img,.dashboard-location img,.city-field img) {filter:brightness(0) invert(98%)}
+.app-window[data-theme=dark] .startup-switch img {filter:grayscale(1)}
 .dashboard-heading,.settings-heading {display:flex;justify-content:space-between;gap:16px;align-items:center}
 .dashboard-heading {background:var(--soft);border:1px solid var(--line);min-height:46px;border-radius:100px;padding:5px 8px 5px 16px;padding-inline:16px 8px}
 .dashboard-location {display:flex;align-items:center;gap:10px;font-weight:700}
@@ -92,11 +93,11 @@
 .hero-details h1 {font-size:clamp(29px,6vw,48px);font-weight:780;line-height:1.14;overflow-wrap:anywhere}
 .prayer-time {background:var(--lime);color:var(--accent-ink);border-radius:100px;font-size:24px;font-weight:780;font-variant-numeric:tabular-nums;padding:3px 16px;margin-top:3px}
 /* Mosque interior photographed by Tom PREJEANT on Unsplash (Ss25m6p5d5E). */
-.hero-clock {display:grid;place-items:center;min-width:0;padding:12px 14px;background:linear-gradient(90deg,var(--hero),var(--hero-wash) 36%,transparent),url('./assets/PrayerArches.jpg') center 45% / cover}
-[dir='rtl'] .hero-clock {background-image:linear-gradient(270deg,var(--hero),var(--hero-wash) 36%,transparent),url('./assets/PrayerArches.jpg')}
+.hero-clock {display:grid;place-items:center;min-width:0;padding:12px 14px;background:linear-gradient(var(--hero-direction,90deg),var(--hero),var(--hero-wash) 36%,var(--hero-edge,transparent)),url('./assets/PrayerArches.jpg') center 45% / cover}
+[dir='rtl'] .hero-clock {--hero-direction:270deg}
 .countdown-ring {width:min(100%,174px);aspect-ratio:1;position:relative;display:grid;place-items:center;border-radius:50%;isolation:isolate;background:var(--clock-face)}
 .countdown-ring::before {content:"";position:absolute;inset:0;border-radius:inherit;padding:7px;background:conic-gradient(var(--lime) var(--remaining), var(--ring-track) 0);mask:linear-gradient(white 0 0) content-box,linear-gradient(white 0 0);mask-composite:exclude}
-.dashboard .countdown {z-index:1;white-space:nowrap;color:#fff9ef;font-size:clamp(16px,4vw,28px);line-height:1.2}
+.dashboard .countdown {z-index:1;white-space:nowrap;color:var(--countdown-ink,#fff9ef);font-size:clamp(16px,4vw,28px);line-height:1.2}
 .prayer-table-card {border-radius:22px;background:var(--white);border:1px solid var(--line);padding:6px 10px}
 .prayer-table {width:100%;border-collapse:collapse;text-align:start;font-size:14px}
 .prayer-table th,.prayer-table td {padding:7px 14px;border-bottom:1px solid var(--line)}
@@ -116,6 +117,13 @@
 .settings-card h2 {font-size:15px;font-weight:650}
 .settings-card .action {min-height:32px}
 .settings-card .language-row {grid-template-columns:1fr minmax(100px,1.4fr)}
+.app-window[data-theme=dark] .dashboard-heading {background:var(--paper)}
+.app-window[data-theme=dark] :is(.action:not(.secondary):not(.plain):not(.error),.prayer-time,.edge-options button[aria-pressed=true],.theme-options button[aria-pressed=true]) {
+  background:var(--row-active);
+  color:var(--ink);
+  box-shadow:inset 0 0 0 1px var(--line);
+}
+.app-window[data-theme=dark] .theme-options img {filter:brightness(0) invert(1)}
 .sound-choice {display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
 .sound-choice select {color:inherit;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font:inherit}
 .sound-choice input {accent-color:var(--lime)}
