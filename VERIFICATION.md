@@ -1,10 +1,14 @@
 # Sajda Windows release verification
 
-Sajda 0.1.0 was built for Windows x64 with Tauri 2 and NSIS. The installer is at `src-tauri/target/release/bundle/nsis/Sajda_0.1.0_x64-setup.exe`.
+## Windows x64 build for 0.1.0
 
-SHA-256 `4B11FD6934377035CEC6FD0F53F67C67CEA9CBEBEEF33F4F20386B08794C72D9`
+The installer is at `src-tauri/target/release/bundle/nsis/Sajda_0.1.0_x64-setup.exe`.
 
-## Checks completed
+SHA-256 `2984CE4DCC107F83FF51982DD9C55EC0847ABC474305F3E2D01114B390A3B09A`
+
+The production frontend build, seven local Rust tests, and the live Open-Meteo and AlAdhan test passed. The NSIS archive passed its integrity check and contained the Windows x64 executable from the release build, with Tauri's NSIS bundle marker applied. This installer is unsigned. A clean installation and manual checks on this exact package are pending.
+
+## Checks completed on an earlier build
 
 | Area | Result |
 | --- | --- |
@@ -19,21 +23,21 @@ SHA-256 `4B11FD6934377035CEC6FD0F53F67C67CEA9CBEBEEF33F4F20386B08794C72D9`
 
 Sajda stores 14 days of AlAdhan prayer times. It uses AlAdhan’s default calculation method and Open-Meteo Geocoding for manual city lookup. Cached schedules refresh on launch and when stale or approaching the end of coverage. [AlAdhan Prayer Times API](https://aladhan.com/prayer-times-api) · [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api)
 
-Windows supplies the toast’s short sound and applies its notification and audio preferences. [Tauri Notifications](https://v2.tauri.app/plugin/notification/)
+The current build plays the selected reminder sound and shows a card in the edge window. A Windows notification is the fallback when the edge window is unavailable or the event fails to emit.
 
 ## Windows checks still pending
 
 - Exercise the physical tray icon with a left click and the native Settings and Quit menu actions. The available desktop controls did not expose the Windows taskbar.
 - Confirm launch behavior at an actual Windows sign-in with startup enabled and disabled.
-- Hear the short notification sound on the target PC and test an actual suspend/resume across a scheduled prayer.
+- Hear the selected reminder sound on the target PC and test an actual suspend/resume across a scheduled prayer.
 
 ## Build and test commands
 
 ```powershell
 npm ci
 npm run build
-cargo test --manifest-path src-tauri/Cargo.toml --features custom-protocol -- --include-ignored
-npm run tauri -- build --bundles nsis
+cargo test --locked --manifest-path src-tauri/Cargo.toml --features custom-protocol -- --include-ignored
+.\node_modules\.bin\tauri.cmd build --bundles nsis --ci
 ```
 
-The Rust suite passed six tests, including a live provider test that requires internet access.
+The live provider test requires internet access.
