@@ -1,5 +1,4 @@
-import startupOn from './assets/StateOn.svg'
-import startupOff from './assets/StateOff.svg'
+import { Switch } from './Switch'
 
 export function StartupSwitch({ ar, enabled, disabled, change }: {
   ar: boolean
@@ -8,11 +7,8 @@ export function StartupSwitch({ ar, enabled, disabled, change }: {
   change: (enabled: boolean) => void
 }) {
   const label = ar ? 'البدء مع ويندوز' : 'Start with Windows'
-  return <div className="startup-row">
+  return <label className="startup-row">
     <span>{label}</span>
-    <button className="startup-switch" role="switch" aria-label={label} aria-checked={enabled}
-      disabled={disabled} onClick={() => change(!enabled)}>
-      <img src={enabled ? startupOn : startupOff} alt="" />
-    </button>
-  </div>
+    <Switch label={label} checked={enabled} disabled={disabled} change={change} />
+  </label>
 }

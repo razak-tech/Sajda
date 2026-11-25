@@ -1,0 +1,52 @@
+/*
+ * From Uiverse.io by njesenberger - https://uiverse.io/njesenberger/friendly-otter-40
+ * MIT License, Copyright (c) njesenberger (Nicolas Jesenberger)
+ */
+.sajda-switch {
+  --switch-active: #1868e3;
+  --switch-inactive: #d3d3d6;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  aspect-ratio: 292 / 142;
+  height: 20px;
+}
+
+.sajda-switch-input {
+  appearance: none;
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 50px;
+  cursor: pointer;
+}
+
+.sajda-switch-input:focus-visible { outline-offset: 2px; }
+.sajda-switch-input:disabled { cursor: default; }
+.sajda-switch-input:disabled + .sajda-switch-art { opacity: .55; }
+.sajda-switch-art { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.sajda-switch-track, .sajda-switch-on, .sajda-switch-off { transition: fill .4s; }
+.sajda-switch-track, .sajda-switch-on { fill: var(--switch-inactive); }
+.sajda-switch-off { fill: #eaeaec; }
+.sajda-switch-input:checked + .sajda-switch-art .sajda-switch-track,
+.sajda-switch-input:checked + .sajda-switch-art .sajda-switch-off { fill: var(--switch-active); }
+.sajda-switch-input:checked + .sajda-switch-art .sajda-switch-on { fill: #fff; }
+
+.sajda-switch-center { transform-origin: center; transition: transform .6s; }
+.sajda-switch-input:checked + .sajda-switch-art .sajda-switch-center { transform: translateX(150px); }
+
+.sajda-switch-knob { transform-origin: center; transition: transform .45s; backface-visibility: hidden; }
+.sajda-switch-knob-left { transform: scale(1); }
+.sajda-switch-knob-right { transform: scale(0); }
+.sajda-switch-input:checked + .sajda-switch-art .sajda-switch-knob-left { transform: scale(0); }
+.sajda-switch-input:checked + .sajda-switch-art .sajda-switch-knob-right { transform: scale(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sajda-switch-art :is(.sajda-switch-track, .sajda-switch-on, .sajda-switch-off, .sajda-switch-center, .sajda-switch-knob) {
+    transition: none;
+  }
+}

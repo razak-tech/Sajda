@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event'
 import { arabicPrayers, type Occurrence } from './prayers'
 import { prayerArtwork } from './prayerArtwork'
 import { Chrome } from './Chrome'
+import { Switch } from './Switch'
 
 const edges = ['top', 'left', 'right', 'off'] as const
 const labels = ['أعلى', 'يسار', 'يمين', 'إيقاف']
@@ -30,6 +31,7 @@ function edgePreferences() {
 type EdgePrefs = ReturnType<typeof edgePreferences>
 
 export function EdgePicker({ ar, prefs, onChange }: { ar: boolean; prefs: EdgePrefs; onChange: (prefs: EdgePrefs) => void }) {
+  const soundsLabel = ar ? 'أصوات الحافة' : 'Edge sounds'
   function save(key: string, value: string) {
     localStorage.setItem(key, value)
     onChange(edgePreferences())
@@ -73,9 +75,9 @@ export function EdgePicker({ ar, prefs, onChange }: { ar: boolean; prefs: EdgePr
         <option value={180}>{ar ? 'قصير' : 'Short'}</option>
       </select>
     </label>
-    <label className="sound-choice">{ar ? 'أصوات الحافة' : 'Edge sounds'}
-      <input type="checkbox" checked={prefs.sounds}
-        onChange={(event) => save('sajda.edge.sounds', String(event.target.checked))} />
+    <label className="sound-choice">{soundsLabel}
+      <Switch label={soundsLabel} checked={prefs.sounds}
+        change={(enabled) => save('sajda.edge.sounds', String(enabled))} />
     </label>
   </div>
 }

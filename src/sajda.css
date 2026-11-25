@@ -81,9 +81,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); out
 .notice { padding: 10px 12px; border-radius: 8px; background: var(--soft); font-size: 12px; line-height: 18px; }
 .city-card { display: grid; gap: 12px; padding: 14px 16px; border-radius: 8px; background: var(--white); }
 .startup-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; font-size: 14px; min-height: 24px; }
-.startup-switch { display: block; width: 40px; height: 24px; padding: 0; border: none; border-radius: 12px; background: transparent; }
-.startup-switch img { display: block; }
-.startup-switch:hover { filter: brightness(.95); }
 .language-row { display: grid; grid-template-columns: 1fr 186px; align-items: center; gap: 12px; }
 .city-field { position: relative; display: grid; }
 .city-field img { position: absolute; inset-inline-start: 14px; inset-block-start: 13px; pointer-events: none; }

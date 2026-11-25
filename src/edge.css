@@ -332,7 +332,6 @@
 .app-window[data-theme=dark] .theme-options button[aria-pressed=false] img { filter: brightness(0) invert(1); }
 .sound-choice { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 .sound-choice select { color: inherit; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
-.sound-choice input { accent-color: var(--focus); }
 .edge-control { display: grid; gap: 4px; padding-block: 3px; }
 .edge-control strong { font-size: 13px; }
 .edge-control output { background: var(--soft); border-radius: 100px; padding: 3px 8px; font-size: 12px; white-space: nowrap; }
